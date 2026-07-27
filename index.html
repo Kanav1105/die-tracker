@@ -167,7 +167,7 @@ body[data-side=office] .warn{background:rgba(214,37,42,.1)}
 /* ============================ SCANNER ============================ */
 async function startCam(){
   stopCam();
-  const vid=document.getElementById("video"); if(!vid) return;
+   vid=document.getElementById("video"); if(!vid) return;
   let stream;
   try{ stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}}}); }
   catch(e){ return setErr("Camera blocked. Needs https and permission. Use TYPE CODE."); }
@@ -177,7 +177,7 @@ async function startCam(){
       detector=new window.BarcodeDetector({formats:["qr_code","code_128","data_matrix","code_39","ean_13"]});
       scanLoop=setInterval(async()=>{
         if(!detector||!vid.videoWidth) return;
-        try{const h=await detector.detect(vid); if(h&&h.length){const v=h[0].rawValue.trim();stopCam();onScan(v)}}catch(_){}
+        try{ h=await detector.detect(vid); if(h&&h.length){const v=h[0].rawValue.trim();stopCam();onScan(v)}}catch(_){}
       },300);
       return;
     }catch(e){ detector=null; }
@@ -298,7 +298,7 @@ function floor(){
         <button class="btn ghost" data-a="home">${ICON.back} ${t("cancel")}</button></div>`;
   }
   if(V.view==="pad"){
-    const keys=["1","2","3","4","5","6","7","8","9","U","0","L","P","C","OK"];
+    const keys=["1","2","3","4","5","6","7","8","9","U","0","L","CS","P","CD","C","BH","OK"];
     return err+`<h1>${t("keypad")}</h1>
       <p class="eyebrow">${lang==="en"?"Machine 101-113 · Die e.g. 2601U":"मशीन 101-113 · डाई जैसे 2601U"}</p>
       <div class="padout">${V.pad?esc(V.pad):"—"}</div>
