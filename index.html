@@ -302,7 +302,7 @@ function floor(){
     return err+`<h1>${t("keypad")}</h1>
       <p class="eyebrow">${lang==="en"?"Machine 101-113 · Die e.g. 2601U":"मशीन 101-113 · डाई जैसे 2601U"}</p>
       <div class="padout">${V.pad?esc(V.pad):"—"}</div>
-      <div class="pad">${keys.map(k=>`<button class="${k==="OK"?"ok":(["U","L","P"].includes(k)?"alpha":"")}"
+      <div class="pad">${keys.map(k=>`<button class="${k==="OK"?"ok":(["U","L","P","CS","CD","BH"].includes(k)?"alpha":"")}"
         data-a="key" data-k="${k}">${k}</button>`).join("")}</div>
       <div class="sp"></div><button class="btn ghost" data-a="home">${ICON.back} ${t("cancel")}</button>`;
   }
