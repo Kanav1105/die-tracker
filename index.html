@@ -174,7 +174,7 @@ async function startCam(){
   const vid=document.getElementById("video"); if(!vid) return;
   let stream;
   try{ stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}}}); }
-  catch(e){ return setErr("Camera blocked. Needs https and permission. Use TYPE CODE."); }
+  catch(e){ return softErr("Camera blocked. Needs https and permission. Use TYPE CODE."); }
   track=stream; vid.srcObject=stream; try{ await vid.play(); }catch(e){}
   if("BarcodeDetector" in window){
     try{
@@ -193,7 +193,7 @@ async function startCam(){
       return;
     }catch(e){}
   }
-  setErr("Scanner unavailable on this device. Use TYPE CODE.");
+  softErr("Scanner unavailable on this device. Use TYPE CODE.");
 }
 function stopCam(){
   clearInterval(scanLoop); scanLoop=null; detector=null;
@@ -201,6 +201,8 @@ function stopCam(){
   if(track){track.getTracks().forEach(t=>t.stop()); track=null;}
 }
 function setErr(m){V.err=m;render()}
+/* camera problems must not overwrite a more useful message already on screen */
+function softErr(m){ if(!V.err) V.err=m; render(); }
 
 /* ============================ FLOW ============================ */
 function onScan(raw){
@@ -275,12 +277,12 @@ function flash(kind,n){
   V.view="flash";render();
   setTimeout(()=>{V.mach=null;V.die=null;V.target=null;V.flash=null;V.showOthers=false;V.view="home";render()},2400);
 }
-function home(){stopCam();V={...V,view:"home",mach:null,die:null,target:null,pad:"",err:null,showOthers:false};render()}
+function home(){stopCam();camTried=false;V={...V,view:"home",mach:null,die:null,target:null,pad:"",err:null,showOthers:false};render()}
 function lamp(){
   if(side==="office")return"office";
   if(V.view==="flash")return V.flash.kind==="pause"?"paused":"ok";
   if(V.err||dbErr)return"alert";
-  if(V.view==="running"){const r=runOf(V.mach.code);return r&&r.paused?"paused":"running"}
+  if(V.view==="running"&&V.mach){const r=runOf(V.mach.code);return r&&r.paused?"paused":"running"}
   const a=openRuns();
   if(a.some(x=>x.r.paused))return"paused";
   return a.length?"running":"idle";
@@ -288,9 +290,18 @@ function lamp(){
 
 
 function render(){
-  document.body.dataset.lamp=lamp();
-  document.getElementById("main").innerHTML=ready?floor()
-    :`<p class="eyebrow">Connecting…</p><div class="warn">${esc(dbErr||"Contacting database")}</div>`;
+  let body;
+  try{
+    document.body.dataset.lamp=lamp();
+    body=ready?floor():`<p class="eyebrow">Connecting…</p>
+      <div class="warn">${esc(dbErr||"Contacting database")}</div>`;
+  }catch(e){
+    console.error("render failed",e);
+    V.view="home"; V.die=null; V.mach=null; V.pickN=null; V.target=null;
+    body=`<div class="warn">Something went wrong: ${esc(e.message)}<br>Returned to the start.</div>`
+      +floor();
+  }
+  document.getElementById("main").innerHTML=body;
   paintNet(); bind();
 }
 const dieCard=d=>`<div class="card"><div class="code">${esc(d.code)}</div>
@@ -343,8 +354,9 @@ function floor(){
       <button class="btn ghost" data-a="home">${ICON.back} ${t("cancel")}</button>`;
   }
   if(V.view==="operation"){
+    if(!V.die){V.view="home";return floor()}
     const sug=suggestStage(V.die.code), list=V.showOthers?OTHERS():PRIMARY();
-    return err+`<p class="eyebrow">${esc(V.die.code)} · ${esc(V.mach.code)} ${esc(V.mach.name)}</p>
+    return err+`<p class="eyebrow">${esc(V.die.code)} · ${esc(V.die.part||"")}</p>
       <h1>${t("whichOp")}</h1><div class="ops">
       ${list.map(s=>{const done=stageDone(V.die.code,s.n);
         const cls=(!V.showOthers&&s.n===sug?"sug ":"")+(done?"done":"");
@@ -355,6 +367,7 @@ function floor(){
       <div class="sp"></div><button class="btn ghost" data-a="home">${ICON.back} ${t("cancel")}</button>`;
   }
   if(V.view==="machine"){
+    if(!V.die||!V.pickN){V.view="home";return floor()}
     const ideal=idealFor(V.pickN);
     const tiles=(ideal.length&&!V.showAllMach)?ideal.map(c=>machineBy(c)).filter(Boolean)
       :MACHINES.filter(m=>m.code!==NA_MACHINE);
@@ -376,6 +389,7 @@ function floor(){
       </div>`;
   }
   if(V.view==="confirm"){
+    if(!V.mach||!V.die){V.view="home";return floor()}
     const off=needsMachine(V.pickN)&&!isIdeal(V.pickN,V.mach.code);
     return err+(off?`<div class="warn"><b>${lang==="en"?"Unusual machine":"असामान्य मशीन"}</b><br>
       ${esc(V.mach.code)} ${esc(V.mach.name)} ${lang==="en"
@@ -390,6 +404,7 @@ function floor(){
       <div class="sp"></div><button class="btn ghost" data-a="backop">${ICON.back} ${t("cancel")}</button>`;
   }
   if(V.view==="running"){
+    if(!V.mach){V.view="home";return floor()}
     const r=runOf(V.mach.code);
     if(!r){V.view="home";return floor()}
     return err+`<p class="eyebrow">${esc(V.mach.code)} ${esc(V.mach.name)}</p>${dieCard(V.die)}
@@ -403,6 +418,7 @@ function floor(){
       <div class="sp"></div><button class="btn ghost" data-a="home">${ICON.back} ${t("cancel")}</button>`;
   }
   if(V.view==="pausemenu"){
+    if(!V.die||!V.mach){V.view="home";return floor()}
     return `<h1>${t("why")}</h1><p class="eyebrow">${esc(V.die.code)} · ${esc(V.mach.name)}</p>
       <div class="reasons">${REASONS.map((r,i)=>`<div class="reason" data-a="reason" data-i="${i}">
         <span>${esc(r.en)}</span><em>${esc(r.hi)}</em></div>`).join("")}</div>
@@ -429,13 +445,13 @@ function floor(){
 
 function bind(){
   document.querySelectorAll("[data-a]").forEach(n=>n.onclick=()=>act(n.dataset));
-  if(V.view==="scan"&&!track) startCam();
+  if(V.view==="scan"&&!track&&!camTried){ camTried=true; startCam(); }
 }
 async function act(d){
   const a=d.a;
   if(a!=="key") V.err=null;
   switch(a){
-    case "scan":V.target=null;V.view="scan";render();break;
+    case "scan":V.target=null;camTried=false;V.view="scan";render();break;
     case "pad":stopCam();V.pad="";V.view="pad";render();break;
     case "home":home();break;
     case "opendie":pickDie(dieBy(d.d));break;
@@ -443,7 +459,7 @@ async function act(d){
     case "mach":chooseMachine(d.c);break;
     case "allmach":V.showAllMach=true;render();break;
     case "idealmach":V.showAllMach=false;render();break;
-    case "scanmach":V.target="machine";V.view="scan";render();break;
+    case "scanmach":V.target="machine";camTried=false;V.view="scan";render();break;
     case "more":V.showOthers=true;render();break;
     case "less":V.showOthers=false;render();break;
     case "op":chooseOp(d.n);break;

@@ -18,7 +18,7 @@ let sb=null, STAGES=[], MACHINES=[], DIES=[], EVENTS=[], QUEUE=[];
 let online=navigator.onLine, ready=false, dbErr=null;
 let lang=LS.get("dt:lang")||"en", side="floor", operator=LS.get("dt:op")||"Team";
 let V={view:"home",target:null,mach:null,die:null,pad:"",flash:null,tab:"machines",err:null,showOthers:false,pickN:null};
-let track=null, zx=null, detector=null, scanLoop=null;
+let track=null, zx=null, detector=null, scanLoop=null, camTried=false;
 
 const REASONS=[{id:"H01",en:"No machine",hi:"मशीन नहीं"},{id:"H02",en:"Crane / shifting",hi:"क्रेन"},
 {id:"H03",en:"No program",hi:"प्रोग्राम नहीं"},{id:"H04",en:"No tooling",hi:"टूल नहीं"},
