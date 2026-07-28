@@ -2,8 +2,10 @@
    Bump CACHE on every deploy or tablets will keep the old build. */
 const CACHE = "die-tracker-v4";
 const SHELL = [
-  "./", "./index.html", "./manager.html", "./core.js", "./manifest.json",
-  "./icon-192.png", "./icon-512.png", "./icon-maskable-512.png"
+  "./", "./index.html", "./manager.html", "./core.js",
+  "./manifest.json", "./manager-manifest.json",
+  "./icon-192.png", "./icon-512.png", "./icon-maskable-512.png",
+  "./icon-mgr-192.png", "./icon-mgr-512.png", "./icon-mgr-maskable-512.png"
 ];
 
 self.addEventListener("install", e => {

@@ -1,5 +1,5 @@
 {
-  "name": "Die Tracker — Shop Floor",
+  "name": "Die Tracker \u2014 Shop Floor",
   "short_name": "Die Tracker",
   "description": "Press die production tracking terminal",
   "start_url": "./index.html",
@@ -10,8 +10,24 @@
   "theme_color": "#12140F",
   "lang": "en",
   "icons": [
-    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "./icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
-  ]
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "id": "/die-tracker/index.html"
 }

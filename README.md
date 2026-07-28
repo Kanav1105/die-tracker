@@ -15,6 +15,7 @@ live across every tablet.
 | `index.html` | **Operator terminal.** This is what goes on the tablets |
 | `manager.html` | **Manager view**, behind a password. Not linked from the operator page |
 | `core.js` | Shared logic: config, database, domain rules. Edited once, used by both |
+| `manifest.json` / `manager-manifest.json` | Install metadata. One per app, so they install separately |
 | `manifest.json` | Makes it installable to the home screen |
 | `sw.js` | Service worker. Offline shell and caching |
 | `icon-192.png` `icon-512.png` `icon-maskable-512.png` | App icons |
@@ -70,11 +71,27 @@ alter publication supabase_realtime add table events;
 
 ---
 
-## Install on a tablet
+## Install
 
-1. Open the URL in Chrome.
+Both pages install independently, with different names and different icons, so they are never
+confused on a device.
+
+**Operator terminal** — on each tablet:
+1. Open https://kanav1105.github.io/die-tracker/ in Chrome.
 2. Menu → **Add to Home Screen** → Install.
 3. Launch from the icon. There should be no address bar.
+Icon: dark, yellow die block. Name: *Die Tracker*.
+
+**Manager** — on the manager's laptop or phone:
+1. Open https://kanav1105.github.io/die-tracker/manager.html in Chrome or Edge.
+2. Either click the **INSTALL** chip in the header, or use the install icon in the address bar,
+   or menu → Install app.
+3. On iPhone or iPad use Safari → Share → Add to Home Screen. Safari does not show the chip.
+Icon: pale, dark bar chart. Name: *DT Manager*.
+
+The INSTALL chip only appears when the browser judges the app installable and it is not already
+installed. If you never see it, it is usually already installed, or you are on a browser that does
+not support prompting.
 
 Then lock the tablet down: install **Fully Kiosk Browser**, set the URL as the start page,
 enable auto-start on boot and keep-screen-on. That gives you a terminal that survives a power cut.
