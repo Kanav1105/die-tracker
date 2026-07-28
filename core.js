@@ -23,7 +23,7 @@ let track=null, zx=null, detector=null, scanLoop=null;
 const REASONS=[{id:"H01",en:"No machine",hi:"मशीन नहीं"},{id:"H02",en:"Crane / shifting",hi:"क्रेन"},
 {id:"H03",en:"No program",hi:"प्रोग्राम नहीं"},{id:"H04",en:"No tooling",hi:"टूल नहीं"},
 {id:"H07",en:"Press busy",hi:"प्रेस व्यस्त"},{id:"H09",en:"Customer hold",hi:"ग्राहक"}];
-const OPERATORS=["Team","Niladri","Naveen","Sarfraj","Himanshu","Kundan","Ajay","Deshdeepak","Sanjay","Deepchandra","Sandeep","Kishore","Om Prakash"];
+const OPERATORS=["Team","Ajay","Deepchandra","Deshdeepak","Himanshu","Kishore","Kundan","Naveen","Niladri","Om Prakash","Sandeep","Sanjay","Sarfraj"];
 const T={scan:{en:"Scan",hi:"स्कैन करें"},scanAny:{en:"Scan die or machine",hi:"डाई या मशीन स्कैन करें"},
 start:{en:"Start",hi:"शुरू करें"},end:{en:"Finish",hi:"पूरा हुआ"},pause:{en:"Hold",hi:"रोकें"},
 resume:{en:"Resume",hi:"फिर शुरू"},running:{en:"Running now",hi:"चल रहा है"},
