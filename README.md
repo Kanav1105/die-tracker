@@ -144,6 +144,21 @@ manager code at all. `manager.html` has no scanner and cannot log shop floor eve
 
 Put only the operator URL on the tablets. Give the manager URL to the office.
 
+### Operator keypad password
+
+Typing a die code by hand bypasses the scanner, so it is gated. The supervisor gives the code out
+when a label is damaged. Set at the top of `index.html`:
+
+```js
+const KEYPAD_PASSWORD  = "2580";   // CHANGE THIS
+const KEYPAD_GRACE_MIN = 3;        // minutes before it asks again
+```
+
+Use only characters that exist on the pad: digits and U, L, P. After a correct entry the keypad
+stays open for the grace period so a mistyped code does not mean re-entering the password.
+
+Machines are chosen by tapping a tile, never scanned, so the keypad is only ever needed for dies.
+
 ### Manager password
 
 Set at the top of `manager.html`:

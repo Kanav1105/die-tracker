@@ -86,6 +86,7 @@ border:1px solid var(--line);border-radius:var(--r);cursor:pointer}
 .pad button:active{background:var(--yellow);color:var(--ink)}
 .pad button.alpha{color:var(--yellow)}
 .pad button.ok{background:var(--green);color:#06210F;border-color:var(--green)}
+.pad button.bad{color:var(--red);border-color:#5A2020}
 .padout{font-family:var(--mono);font-size:36px;font-weight:700;letter-spacing:.14em;text-align:center;padding:12px;
 background:var(--panel);border:1px solid var(--line);border-radius:var(--r);min-height:62px;color:var(--yellow)}
 .ops{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:10px}
@@ -167,7 +168,23 @@ body[data-side=office] .warn{background:rgba(214,37,42,.1)}
 <script src="./core.js"></script>
 <script>
 /* OPERATOR TERMINAL. There is no route to the manager view from this page.
-   Manager lives at ./manager.html */
+   Manager lives at ./manager.html
+
+   ---------------------------------------------------------------------
+   KEYPAD PASSWORD
+   Typing a die code by hand bypasses the scan, so it is gated. The
+   supervisor gives this out when a label is damaged or unreadable.
+
+   CHANGE IT, then commit and bump CACHE in sw.js.
+
+   Keep it to characters that exist on the pad: digits 0-9 and U, L, P.
+   This is a deterrent, not security: it sits in JavaScript that anyone
+   can read with View Source. It stops routine bypassing of the scanner,
+   which is the actual goal.
+   --------------------------------------------------------------------- */
+const KEYPAD_PASSWORD  = "2580";
+const KEYPAD_GRACE_MIN = 3;      // minutes before it asks again
+let padUnlockUntil = 0;
 /* ============================ SCANNER ============================ */
 async function startCam(){
   stopCam();
@@ -207,13 +224,6 @@ function softErr(m){ if(!V.err) V.err=m; render(); }
 /* ============================ FLOW ============================ */
 function onScan(raw){
   V.err=null;
-  if(V.target==="machine"){
-    const m=machineBy(raw);
-    if(m) return chooseMachine(m.code);
-    if(dieBy(raw)){ V.err=(lang==="en"?"That is a die. Scan the MACHINE.":"यह डाई है। मशीन स्कैन करें।");
-      V.view="machine"; return render(); }
-    V.err=(lang==="en"?"Machine not recognised: ":"मशीन नहीं मिली: ")+raw; V.view="machine"; return render();
-  }
   const d=dieBy(raw);
   if(d) return pickDie(d);
   if(machineBy(raw)){ V.err=(lang==="en"?"Scan the DIE first.":"पहले डाई स्कैन करें।");
@@ -324,10 +334,10 @@ function floor(){
         :`<div class="card"><div class="sub">${t("nothing")}</div></div>`}
       <div class="sp"></div><div class="row two">
         <button class="btn ghost" data-a="oper">${lang==="en"?"Change operator":"ऑपरेटर बदलें"}</button>
-        <button class="btn ghost" data-a="pad">${ICON.key} ${t("keypad")}</button></div>`;
+        <button class="btn ghost" data-a="pad">${ICON.key} ${t("keypad")}<small>${lang==="en"?"needs supervisor code":"सुपरवाइज़र कोड चाहिए"}</small></button></div>`;
   }
   if(V.view==="scan"){
-    const need=V.target==="machine"?t("needMach"):t("needDie");
+    const need=t("needDie");
     return err+`<h1>${esc(need)}</h1>
       <p class="eyebrow">${V.mach?esc(V.mach.code+" "+V.mach.name)+" · ":""}${V.die?esc(V.die.code):""}</p>
       <div class="reticle"><video id="video" playsinline muted></video></div>
@@ -335,12 +345,25 @@ function floor(){
         <button class="btn ghost" data-a="pad">${ICON.key} ${t("keypad")}</button>
         <button class="btn ghost" data-a="home">${ICON.back} ${t("cancel")}</button></div>`;
   }
+  if(V.view==="padlock"){
+    const keys=["1","2","3","4","5","6","7","8","9","U","0","L","P","C","OK"];
+    return `<h1>${lang==="en"?"Supervisor code":"सुपरवाइज़र कोड"}</h1>
+      <p class="eyebrow">${lang==="en"
+        ?"Typing a code by hand needs permission. Ask the supervisor."
+        :"हाथ से कोड डालने के लिए अनुमति चाहिए। सुपरवाइज़र से पूछें।"}</p>
+      ${V.pwErr?`<div class="warn">${lang==="en"?"Wrong code.":"गलत कोड।"}</div>`:""}
+      <div class="padout">${(V.pw||"").replace(/./g,"\u2022")||"—"}</div>
+      <div class="pad">${keys.map(k=>`<button class="${k==="OK"?"ok":(k==="C"?"bad":(/^[A-Z]$/.test(k)?"alpha":""))}"
+        data-a="pwkey" data-k="${k}">${k}</button>`).join("")}</div>
+      <div class="sp"></div>
+      <button class="btn ghost" data-a="home">${ICON.back} ${t("cancel")}</button>`;
+  }
   if(V.view==="pad"){
     const keys=["1","2","3","4","5","6","7","8","9","U","0","L","P","C","OK"];
     return err+`<h1>${t("keypad")}</h1>
       <p class="eyebrow">${lang==="en"?"Machine 101-113 · Die 5153U, or 5153 for the set":"मशीन 101-113 · डाई 5153U"}</p>
       <div class="padout">${V.pad?esc(V.pad):"—"}</div>
-      <div class="pad">${keys.map(k=>`<button class="${k==="OK"?"ok":(["U","L","P"].includes(k)?"alpha":"")}"
+      <div class="pad">${keys.map(k=>`<button class="${k==="OK"?"ok":(k==="C"?"bad":(/^[A-Z]$/.test(k)?"alpha":""))}"
         data-a="key" data-k="${k}">${k}</button>`).join("")}</div>
       <div class="sp"></div><button class="btn ghost" data-a="home">${ICON.back} ${t("cancel")}</button>`;
   }
@@ -383,10 +406,7 @@ function floor(){
           : (ideal.length?`<div class="op more" data-a="idealmach"><i>&nbsp;</i><b>${ICON.back} ${t("back")}</b></div>`:"")}
       </div>
       <div class="sp"></div>
-      <div class="row two">
-        <button class="btn ghost" data-a="scanmach">${ICON.scan} ${lang==="en"?"Scan machine":"मशीन स्कैन"}</button>
-        <button class="btn ghost" data-a="home">${ICON.back} ${t("cancel")}</button>
-      </div>`;
+      <button class="btn ghost" data-a="home">${ICON.back} ${t("cancel")}</button>`;
   }
   if(V.view==="confirm"){
     if(!V.mach||!V.die){V.view="home";return floor()}
@@ -452,14 +472,17 @@ async function act(d){
   if(a!=="key") V.err=null;
   switch(a){
     case "scan":V.target=null;camTried=false;V.view="scan";render();break;
-    case "pad":stopCam();V.pad="";V.view="pad";render();break;
+    case "pad":
+      stopCam();
+      if(Date.now()<padUnlockUntil){ V.pad=""; V.view="pad"; }
+      else { V.pw=""; V.pwErr=false; V.view="padlock"; }
+      render(); break;
     case "home":home();break;
     case "opendie":pickDie(dieBy(d.d));break;
     case "pickelem":pickDie(dieBy(d.c));break;
     case "mach":chooseMachine(d.c);break;
     case "allmach":V.showAllMach=true;render();break;
     case "idealmach":V.showAllMach=false;render();break;
-    case "scanmach":V.target="machine";camTried=false;V.view="scan";render();break;
     case "more":V.showOthers=true;render();break;
     case "less":V.showOthers=false;render();break;
     case "op":chooseOp(d.n);break;
@@ -472,6 +495,16 @@ async function act(d){
     case "resume":doResume();break;
     case "oper":V.view="oper";render();break;
     case "setoper":operator=d.o;LS.set("dt:op",operator);home();break;
+    case "pwkey":
+      if(d.k==="C") V.pw=(V.pw||"").slice(0,-1);
+      else if(d.k==="OK"){
+        if((V.pw||"")===KEYPAD_PASSWORD){
+          padUnlockUntil=Date.now()+KEYPAD_GRACE_MIN*60000;
+          V.pw=""; V.pwErr=false; V.pad=""; V.view="pad";
+        } else { V.pw=""; V.pwErr=true; }
+      }
+      else if((V.pw||"").length<12) V.pw=(V.pw||"")+d.k;
+      render(); break;
     case "key":
       if(d.k==="C")V.pad=V.pad.slice(0,-1);
       else if(d.k==="OK"){const p=V.pad;V.pad="";if(p)return onScan(p)}
