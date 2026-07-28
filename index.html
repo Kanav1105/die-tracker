@@ -101,6 +101,10 @@ font-weight:700;letter-spacing:.08em;background:var(--green);color:#06210F;paddi
 .op.done{opacity:.55}
 .op.done::after{content:"DONE";position:absolute;top:-9px;right:8px;font-family:var(--mono);font-size:9px;font-weight:700;
 letter-spacing:.08em;background:var(--panel2);color:var(--dim);padding:2px 6px;border-radius:2px;border:1px solid var(--line)}
+.op.ideal{border-color:var(--green);border-width:2px;background:rgba(47,168,79,.1)}
+.op.ideal::after{content:"IDEAL";position:absolute;top:-9px;right:8px;font-family:var(--mono);
+font-size:9px;font-weight:700;letter-spacing:.08em;background:var(--green);color:#06210F;
+padding:2px 6px;border-radius:2px}
 .op.more{background:var(--panel2);border-style:dashed}
 .reasons{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:12px}
 .reason{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:19px 14px;cursor:pointer;
@@ -201,33 +205,54 @@ function setErr(m){V.err=m;render()}
 /* ============================ FLOW ============================ */
 function onScan(raw){
   V.err=null;
-  const m=machineBy(raw), d=dieBy(raw);
-  if(m) return pickMachine(m);
+  if(V.target==="machine"){
+    const m=machineBy(raw);
+    if(m) return chooseMachine(m.code);
+    if(dieBy(raw)){ V.err=(lang==="en"?"That is a die. Scan the MACHINE.":"यह डाई है। मशीन स्कैन करें।");
+      V.view="machine"; return render(); }
+    V.err=(lang==="en"?"Machine not recognised: ":"मशीन नहीं मिली: ")+raw; V.view="machine"; return render();
+  }
+  const d=dieBy(raw);
   if(d) return pickDie(d);
+  if(machineBy(raw)){ V.err=(lang==="en"?"Scan the DIE first.":"पहले डाई स्कैन करें।");
+    V.view="scan"; return render(); }
   const set=diesInSet(raw);
   if(set.length){ V.setList=set; V.setNo=norm(raw); V.view="setpick"; return render(); }
-  V.err="Code not recognised: "+raw; V.view="scan"; render();
+  V.err=(lang==="en"?"Code not recognised: ":"कोड नहीं मिला: ")+raw; V.view="scan"; render();
 }
-function pickMachine(m){
-  V.mach=m; const r=runOf(m.code);
-  if(r){V.die=DIES.find(d=>d.code===r.die)||{code:r.die,part:"—",operation:"—"};V.view="running"}
-  else if(V.die){V.showOthers=false;V.view="operation"}
-  else {V.target="die";V.view="scan"}
-  render();
-}
+
 function pickDie(d){
-  V.die=d;
-  if(V.mach){ const r=runOf(V.mach.code);
-    if(r){V.view="running"} else {V.showOthers=false;V.view="operation"} }
-  else {V.target="machine";V.view="scan"}
-  render();
+  V.die=d; V.mach=null; V.pickN=null; V.showOthers=false; V.showAllMach=false; V.target=null;
+  const run=runningElsewhere(d.code);
+  if(run){ V.mach=run.m; V.view="running"; return render(); }
+  V.view="operation"; render();
 }
-function doStart(n){
+function chooseOp(n){
+  V.pickN=Number(n);
+  if(!needsMachine(V.pickN)){
+    const na=machineBy(NA_MACHINE);
+    if(!na){ V.err="Machine code "+NA_MACHINE+" (NA) is missing from the database."; return render(); }
+    V.mach=na; V.view="confirm"; return render();
+  }
+  V.target="machine"; V.showAllMach=false; V.view="machine"; render();
+}
+function chooseMachine(code){
+  const m=machineBy(code);
+  if(!m){ V.err="Machine not found: "+code; V.view="machine"; return render(); }
+  const busy=runOf(m.code);
+  if(busy && m.code!==NA_MACHINE){
+    V.err=m.code+" "+m.name+" is already running "+busy.die+". Finish that first.";
+    V.view="machine"; return render();
+  }
+  V.mach=m; V.target=null; V.view="confirm"; render();
+}
+function doStart(){
   const other=runningElsewhere(V.die.code);
-  if(other){V.err="Die "+V.die.code+" is already running on "+other.m.code+" "+other.m.name+". Finish it there first.";
-    V.view="operation";return render()}
-  pushEvent({type:"START",die:V.die.code,machine:V.mach.code,stage:n,sug:suggestStage(V.die.code)});
-  flash("start",n);
+  if(other){ V.err="Die "+V.die.code+" is already running on "+other.m.code+" "+other.m.name+".";
+    V.view="operation"; return render(); }
+  pushEvent({type:"START",die:V.die.code,machine:V.mach.code,stage:V.pickN,
+             sug:suggestStage(V.die.code)});
+  flash("start",V.pickN);
 }
 function doEnd(){
   const r=runOf(V.mach.code); if(!r)return;
@@ -278,9 +303,9 @@ function floor(){
   if(V.view==="home"){
     const runs=openRuns();
     return err+`<p class="eyebrow">${esc(operator)} · ${runs.length} ${lang==="en"?"in progress":"चल रहे"}</p>
-      <button class="btn scan" data-a="scan">${ICON.scan}${t("scan")}<small>${t("scanAny")}</small></button>
+      <button class="btn scan" data-a="scan">${ICON.scan}${t("scan")}<small>${t("needDie")}</small></button>
       <div class="sp"></div><p class="eyebrow">${t("running")}</p>
-      ${runs.length?runs.map(x=>`<div class="runitem ${x.r.paused?"p":""}" data-a="open" data-m="${esc(x.m.code)}">
+      ${runs.length?runs.map(x=>`<div class="runitem ${x.r.paused?"p":""}" data-a="opendie" data-d="${esc(x.r.die)}">
         <div class="t"><div class="dc">${esc(x.r.die)}</div>
         <div class="sb">${esc(x.m.code)} ${esc(x.m.name)} · ${esc(stageName(x.r.stage))}</div></div>
         <div style="text-align:right"><div class="el">${el(Date.now()-x.r.ts)}</div>
@@ -291,7 +316,7 @@ function floor(){
         <button class="btn ghost" data-a="pad">${ICON.key} ${t("keypad")}</button></div>`;
   }
   if(V.view==="scan"){
-    const need=V.target==="die"?t("needDie"):V.target==="machine"?t("needMach"):t("scanAny");
+    const need=V.target==="machine"?t("needMach"):t("needDie");
     return err+`<h1>${esc(need)}</h1>
       <p class="eyebrow">${V.mach?esc(V.mach.code+" "+V.mach.name)+" · ":""}${V.die?esc(V.die.code):""}</p>
       <div class="reticle"><video id="video" playsinline muted></video></div>
@@ -323,14 +348,43 @@ function floor(){
       <h1>${t("whichOp")}</h1><div class="ops">
       ${list.map(s=>{const done=stageDone(V.die.code,s.n);
         const cls=(!V.showOthers&&s.n===sug?"sug ":"")+(done?"done":"");
-        return `<div class="op ${cls}" data-a="op" data-n="${s.n}"><i>${s.n<10?"0"+s.n:s.n}</i><b>${esc(s.name)}</b></div>`}).join("")}
+        const nm=needsMachine(s.n)?"":(lang==="en"?" · no m/c":" · मशीन नहीं");
+        return `<div class="op ${cls}" data-a="op" data-n="${s.n}"><i>${s.n<10?"0"+s.n:s.n}${nm}</i><b>${esc(s.name)}</b></div>`}).join("")}
       ${V.showOthers?`<div class="op more" data-a="less"><i>&nbsp;</i><b>${ICON.back} ${t("back")}</b></div>`
         :`<div class="op more" data-a="more"><i>11-15</i><b>${t("others")}</b></div>`}</div>
       <div class="sp"></div><button class="btn ghost" data-a="home">${ICON.back} ${t("cancel")}</button>`;
   }
+  if(V.view==="machine"){
+    const ideal=idealFor(V.pickN);
+    const tiles=(ideal.length&&!V.showAllMach)?ideal.map(c=>machineBy(c)).filter(Boolean)
+      :MACHINES.filter(m=>m.code!==NA_MACHINE);
+    return err+`<p class="eyebrow">${esc(V.die.code)} · ${V.pickN} ${esc(stageName(V.pickN))}</p>
+      <h1>${lang==="en"?"Which machine?":"कौन सी मशीन?"}</h1>
+      <div class="ops">
+        ${tiles.map(m=>{const busy=runOf(m.code);
+          const cls=(ideal.length&&ideal.includes(m.code)?"ideal ":"")+(busy?"done":"");
+          return `<div class="op ${cls}" data-a="mach" data-c="${esc(m.code)}">
+            <i>${esc(m.code)}${busy?" · busy":""}</i><b>${esc(m.name)}</b></div>`}).join("")}
+        ${(ideal.length&&!V.showAllMach)
+          ? `<div class="op more" data-a="allmach"><i>&nbsp;</i><b>${lang==="en"?"Other machine":"अन्य मशीन"}</b></div>`
+          : (ideal.length?`<div class="op more" data-a="idealmach"><i>&nbsp;</i><b>${ICON.back} ${t("back")}</b></div>`:"")}
+      </div>
+      <div class="sp"></div>
+      <div class="row two">
+        <button class="btn ghost" data-a="scanmach">${ICON.scan} ${lang==="en"?"Scan machine":"मशीन स्कैन"}</button>
+        <button class="btn ghost" data-a="home">${ICON.back} ${t("cancel")}</button>
+      </div>`;
+  }
   if(V.view==="confirm"){
-    return err+`<p class="eyebrow">${lang==="en"?"Check, then start":"जाँचें, फिर शुरू करें"}</p>
+    const off=needsMachine(V.pickN)&&!isIdeal(V.pickN,V.mach.code);
+    return err+(off?`<div class="warn"><b>${lang==="en"?"Unusual machine":"असामान्य मशीन"}</b><br>
+      ${esc(V.mach.code)} ${esc(V.mach.name)} ${lang==="en"
+        ?"is not normally used for this operation. You can still start."
+        :"आम तौर पर इस काम के लिए नहीं है। फिर भी शुरू कर सकते हैं।"}</div>`:"")
+      +`<p class="eyebrow">${lang==="en"?"Check, then start":"जाँचें, फिर शुरू करें"}</p>
       ${dieCard(V.die)}<div class="sp"></div>${machCard(V.mach)}
+      ${!needsMachine(V.pickN)?`<p class="eyebrow" style="margin-top:10px">${lang==="en"
+        ?"No machine needed for this operation":"इस काम के लिए मशीन नहीं चाहिए"}</p>`:""}
       <div class="stage">${V.pickN} · ${esc(stageName(V.pickN))}</div>
       <button class="btn go" data-a="confirmstart">${ICON.play}${t("start")}</button>
       <div class="sp"></div><button class="btn ghost" data-a="backop">${ICON.back} ${t("cancel")}</button>`;
@@ -384,13 +438,17 @@ async function act(d){
     case "scan":V.target=null;V.view="scan";render();break;
     case "pad":stopCam();V.pad="";V.view="pad";render();break;
     case "home":home();break;
-    case "open":pickMachine(machineBy(d.m));break;
+    case "opendie":pickDie(dieBy(d.d));break;
     case "pickelem":pickDie(dieBy(d.c));break;
+    case "mach":chooseMachine(d.c);break;
+    case "allmach":V.showAllMach=true;render();break;
+    case "idealmach":V.showAllMach=false;render();break;
+    case "scanmach":V.target="machine";V.view="scan";render();break;
     case "more":V.showOthers=true;render();break;
     case "less":V.showOthers=false;render();break;
-    case "op":V.pickN=+d.n;V.view="confirm";render();break;
-    case "backop":V.view="operation";render();break;
-    case "confirmstart":doStart(V.pickN);break;
+    case "op":chooseOp(d.n);break;
+    case "backop":V.target=null;V.view=needsMachine(V.pickN)?"machine":"operation";render();break;
+    case "confirmstart":doStart();break;
     case "end":doEnd();break;
     case "pausemenu":V.view="pausemenu";render();break;
     case "back-run":V.view="running";render();break;

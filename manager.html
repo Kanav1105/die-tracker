@@ -159,7 +159,7 @@ body[data-side=office] .warn{background:rgba(214,37,42,.1)}
     <div class="sp"></div>
     <button class="obtn pri" id="pwgo" style="width:100%;padding:13px">Enter</button>
     <p class="note" style="margin-top:18px">Shop floor terminal is at
-      <a href="./index.html" style="color:#185FA5">Operator Terminal</a>.</p>
+      <a href="./index.html" style="color:#185FA5">index.html</a>.</p>
   </div>
 </div>
 <div id="app" style="display:none">
@@ -266,6 +266,8 @@ function office(){
         <div class="sp"></div><p class="note">Requires an insert policy on <code>dies</code>.
         See README. Otherwise add dies in the Supabase table editor.</p></div>
       <div class="mcard"><h3>Connection</h3>
+        <p class="note">Project<br><code>${esc(SUPABASE_URL)}</code></p>
+        <div class="sp" style="height:8px"></div>
         <p class="note">Device<br><code>${esc(DEVICE_ID)}</code></p>
         <div class="sp" style="height:8px"></div>
         <p class="note">Queued locally: <b>${QUEUE.length}</b><br>

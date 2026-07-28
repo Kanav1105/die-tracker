@@ -23,7 +23,7 @@ let track=null, zx=null, detector=null, scanLoop=null;
 const REASONS=[{id:"H01",en:"No machine",hi:"मशीन नहीं"},{id:"H02",en:"Crane / shifting",hi:"क्रेन"},
 {id:"H03",en:"No program",hi:"प्रोग्राम नहीं"},{id:"H04",en:"No tooling",hi:"टूल नहीं"},
 {id:"H07",en:"Press busy",hi:"प्रेस व्यस्त"},{id:"H09",en:"Customer hold",hi:"ग्राहक"}];
-const OPERATORS=["Team","Ajay","Deepchandra","Deshdeepak","Himanshu","Kishore","Kundan","Naveen","Niladri","Om Prakash","Sandeep","Sanjay","Sarfraj"];
+const OPERATORS=["Team","OP01 Ramesh","OP02 Suresh","OP03 Anil","OP04 Vikram","OP05 Dinesh"];
 const T={scan:{en:"Scan",hi:"स्कैन करें"},scanAny:{en:"Scan die or machine",hi:"डाई या मशीन स्कैन करें"},
 start:{en:"Start",hi:"शुरू करें"},end:{en:"Finish",hi:"पूरा हुआ"},pause:{en:"Hold",hi:"रोकें"},
 resume:{en:"Resume",hi:"फिर शुरू"},running:{en:"Running now",hi:"चल रहा है"},
@@ -119,6 +119,29 @@ function paintNet(){
 const stageName=n=>{const s=STAGES.find(x=>x.n===n);return s?s.name:""};
 const PRIMARY=()=>STAGES.filter(s=>!s.other);
 const OTHERS=()=>STAGES.filter(s=>s.other);
+/* ---------------- machine rules per operation ----------------
+   Edit here. Codes, with names in the comment so they stay readable.
+   101 H16 · 102 H22 · 103 OK1 · 104 OK2 · 105 OK3 · 106 OK4
+   107 RAD1 · 108 RAD2 · 109 RAD3 · 110 200T · 111 500T · 112 800T · 100 NA        */
+const NA_MACHINE = "100";                       // auto-used where no machine applies
+const NO_MACHINE_STAGES = [1,3,5,8];            // Raw Casting, Fitting, Heat Treatment, Assembly
+const MACHINING = ["101","102","103","104","105","106"];   // H16 H22 OK1-4
+const PRESSES   = ["110","111","112"];                     // 200T 500T 800T
+const IDEAL_MACHINES = {
+  2:MACHINING,   // P1/P2
+  4:MACHINING,   // P3 Machining
+  6:MACHINING,   // P4 Machining
+  7:MACHINING,   // P5 Machining
+  9:PRESSES,     // Spotting
+ 10:PRESSES,     // Trial
+ 13:PRESSES      // Part Production
+  // 11 Surface Correction, 12 Trim Correction, 14 ECN Machining, 15 Drilling:
+  // no rule set, so any machine is accepted without warning.
+};
+const needsMachine = n => !NO_MACHINE_STAGES.includes(Number(n));
+const idealFor     = n => IDEAL_MACHINES[Number(n)] || [];
+const isIdeal      = (n,code) => { const l=idealFor(n); return !l.length || l.includes(String(code)); };
+
 const dieSetOf=c=>{const m=String(c||"").match(/^(FG-\d+|\d+)/i);return m?m[1].toUpperCase():norm(c)};
 const diesInSet=s=>DIES.filter(d=>dieSetOf(d.code)===norm(s));
 const machineBy=v=>MACHINES.find(m=>norm(m.code)===norm(v));
