@@ -22,8 +22,13 @@ let track=null, zx=null, detector=null, scanLoop=null, camTried=false;
 
 const REASONS=[{id:"H01",en:"No machine",hi:"मशीन नहीं"},{id:"H02",en:"Crane / shifting",hi:"क्रेन"},
 {id:"H03",en:"No program",hi:"प्रोग्राम नहीं"},{id:"H04",en:"No tooling",hi:"टूल नहीं"},
-{id:"H07",en:"Press busy",hi:"प्रेस व्यस्त"},{id:"H09",en:"Customer hold",hi:"ग्राहक"}];
-const OPERATORS=["Team","Ajay", "Deepchandra", "Deshdeepak", "Himanshu", "Kishore", "Kundan", "Naveen", "Niladri", "Om Prakash", "Sandeep", "Sanjay", "Sarfraj"];
+{id:"H07",en:"Press busy",hi:"प्रेस व्यस्त"},{id:"H09",en:"Customer hold",hi:"ग्राहक"},
+{id:"H11",en:"Shift end",hi:"शिफ्ट समाप्त"},{id:"H12",en:"Die fouling",hi:"डाई फाउलिंग"}];
+/* Project leaders, alphabetical. "Team" stays first as the shared default. */
+const OPERATORS=["Team",
+"Ajay","Amit","Deepchandra","Deshdeepak","Devilal","Himanshu","Kishore","Krishna Murari",
+"Kundan","Lalit","Mahesh","Mandeep","Mrityunjay","Naveen","Niladri","Om Prakash","Pinku",
+"Puneet Gaur","Sahil Singh","Sahil Yadav","Sandeep","Sanjay","Sanjeev","Sarfraj","Satinder"];
 const T={scan:{en:"Scan",hi:"स्कैन करें"},scanAny:{en:"Scan die or machine",hi:"डाई या मशीन स्कैन करें"},
 start:{en:"Start",hi:"शुरू करें"},end:{en:"Finish",hi:"पूरा हुआ"},pause:{en:"Hold",hi:"रोकें"},
 resume:{en:"Resume",hi:"फिर शुरू"},running:{en:"Running now",hi:"चल रहा है"},
@@ -31,7 +36,10 @@ nothing:{en:"Nothing running",hi:"कुछ नहीं चल रहा"},keyp
 cancel:{en:"Cancel",hi:"रद्द करें"},needDie:{en:"Now scan the die",hi:"अब डाई स्कैन करें"},
 needMach:{en:"Now scan the machine",hi:"अब मशीन स्कैन करें"},why:{en:"Why has it stopped?",hi:"क्यों रुका है?"},
 onhold:{en:"On hold",hi:"रुका हुआ"},whichOp:{en:"Which operation?",hi:"कौन सा काम?"},
-others:{en:"Others",hi:"अन्य"},back:{en:"Back",hi:"वापस"}};
+others:{en:"Others",hi:"अन्य"},back:{en:"Back",hi:"वापस"},
+leader:{en:"Project Leader",hi:"प्रोजेक्ट लीडर"},
+changeLeader:{en:"Change Project Leader",hi:"प्रोजेक्ट लीडर बदलें"},
+whoLeader:{en:"Who is the Project Leader?",hi:"प्रोजेक्ट लीडर कौन है?"}};
 const t=k=>T[k]?(T[k][lang]||T[k].en):k;
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const norm=v=>String(v||"").trim().toUpperCase();
@@ -138,6 +146,12 @@ const IDEAL_MACHINES = {
   // 11 Surface Correction, 12 Trim Correction, 14 ECN Machining, 15 Drilling:
   // no rule set, so any machine is accepted without warning.
 };
+/* Machines that can hold several dies at the same time. Outsourcing is not a
+   physical machine: many dies can sit at a vendor simultaneously, so the
+   one-die-per-machine rule does not apply to it. */
+const MULTI_DIE_MACHINES = ["114"];             // 114 OS (Outsource)
+const isMultiDie = code => MULTI_DIE_MACHINES.includes(String(code));
+
 const needsMachine = n => !NO_MACHINE_STAGES.includes(Number(n));
 const idealFor     = n => IDEAL_MACHINES[Number(n)] || [];
 const isIdeal      = (n,code) => { const l=idealFor(n); return !l.length || l.includes(String(code)); };
@@ -146,18 +160,25 @@ const dieSetOf=c=>{const m=String(c||"").match(/^(FG-\d+|\d+)/i);return m?m[1].t
 const diesInSet=s=>DIES.filter(d=>dieSetOf(d.code)===norm(s));
 const machineBy=v=>MACHINES.find(m=>norm(m.code)===norm(v));
 const dieBy=v=>DIES.find(d=>norm(d.code)===norm(v));
-function runOf(mCode){
-  const evs=EVENTS.filter(e=>e.machine===mCode).sort((a,b)=>a.ts-b.ts);
-  let r=null;
-  for(const e of evs){
-    if(e.type==="START")r={die:e.die,stage:e.stage,ts:e.ts,by:e.by,paused:false,reason:null};
-    else if(e.type==="END")r=null;
-    else if(e.type==="PAUSE"&&r){r.paused=true;r.reason=e.reason}
-    else if(e.type==="RESUME"&&r){r.paused=false;r.reason=null}
-  }
-  return r;
+/* Open runs are derived per DIE. A die can only be in one place at a time, so
+   keying on the die is correct whether the machine holds one job or many. */
+function computeRuns(){
+  const byDie={};
+  [...EVENTS].sort((a,b)=>a.ts-b.ts).forEach(e=>{
+    if(!e.die) return;
+    if(e.type==="START") byDie[e.die]={die:e.die,machine:e.machine,stage:e.stage,ts:e.ts,
+                                       by:e.by,paused:false,reason:null};
+    else if(e.type==="END") delete byDie[e.die];
+    else if(e.type==="PAUSE"&&byDie[e.die]){byDie[e.die].paused=true;byDie[e.die].reason=e.reason}
+    else if(e.type==="RESUME"&&byDie[e.die]){byDie[e.die].paused=false;byDie[e.die].reason=null}
+  });
+  return Object.values(byDie);
 }
-const openRuns=()=>MACHINES.map(m=>({m,r:runOf(m.code)})).filter(x=>x.r);
+const runOfDie=code=>computeRuns().find(r=>r.die===code)||null;
+const runsOn=mCode=>computeRuns().filter(r=>r.machine===mCode);
+/* single-machine occupancy check; meaningless for multi-die machines */
+const runOf=mCode=>isMultiDie(mCode)?null:(runsOn(mCode)[0]||null);
+const openRuns=()=>computeRuns().map(r=>({m:machineBy(r.machine)||{code:r.machine||"?",name:r.machine||"?"},r}));
 const stageDone=(die,n)=>EVENTS.some(e=>e.type==="END"&&e.die===die&&e.stage===n);
 const runningElsewhere=die=>openRuns().find(x=>x.r.die===die);
 function suggestStage(d){const s=PRIMARY().find(st=>!stageDone(d,st.n));return s?s.n:null}

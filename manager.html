@@ -159,7 +159,7 @@ body[data-side=office] .warn{background:rgba(214,37,42,.1)}
     <div class="sp"></div>
     <button class="obtn pri" id="pwgo" style="width:100%;padding:13px">Enter</button>
     <p class="note" style="margin-top:18px">Shop floor terminal is at
-      <a href="./index.html" style="color:#185FA5">Operator Terminal</a>.</p>
+      <a href="./floor.html" target="_blank" rel="noopener" style="color:#185FA5">Operator Terminal</a>.</p>
   </div>
 </div>
 <div id="app" style="display:none">
@@ -213,12 +213,24 @@ function office(){
     const runs=openRuns();
     body=`<p class="note"><b>${runs.length}</b> of ${MACHINES.length} machines occupied ·
       <b>${runs.filter(x=>x.r.paused).length}</b> on hold · updates live</p><div class="sp"></div>
-      <div class="grid">${MACHINES.map(m=>{const r=runOf(m.code);
-      return `<div class="mcard ${r?(r.paused?"pau":"run"):""}"><h3>${esc(m.name)}</h3>
-        <div class="k">${esc(m.code)}</div><div class="v">${r?esc(r.die):"— idle —"}</div>
-        <div class="k">${r?esc(r.stage+" "+stageName(r.stage))+" · "+el(Date.now()-r.ts):"available"}</div>
-        ${r?`<div class="sp" style="height:10px"></div>
-          <button class="obtn dan" data-a="force" data-m="${esc(m.code)}">Force finish</button>`:""}</div>`}).join("")}</div>`;
+      <div class="grid">${MACHINES.map(m=>{
+        const multi=isMultiDie(m.code), rs=runsOn(m.code), r=multi?null:rs[0];
+        const cls=multi?(rs.length?"run":""):(r?(r.paused?"pau":"run"):"");
+      return `<div class="mcard ${cls}"><h3>${esc(m.name)}</h3>
+        <div class="k">${esc(m.code)}${multi?" · multiple dies allowed":""}</div>
+        ${multi
+          ? (rs.length
+              ? rs.map(x=>`<div class="v">${esc(x.die)}
+                  <span class="k">${esc(x.stage+" "+stageName(x.stage))} · ${el(Date.now()-x.ts)}
+                  ${x.paused?" · on hold":""}</span>
+                  <button class="obtn dan" style="padding:4px 8px;font-size:12px;margin-top:4px"
+                    data-a="force" data-d="${esc(x.die)}">Finish</button></div>`).join("")
+              : `<div class="v">— none out —</div>`)
+          : `<div class="v">${r?esc(r.die):"— idle —"}</div>
+             <div class="k">${r?esc(r.stage+" "+stageName(r.stage))+" · "+el(Date.now()-r.ts):"available"}</div>
+             ${r?`<div class="sp" style="height:10px"></div>
+               <button class="obtn dan" data-a="force" data-d="${esc(r.die)}">Force finish</button>`:""}`}
+      </div>`}).join("")}</div>`;
   }
   if(V.tab==="dies"){
     const q=(V.q||"").trim().toUpperCase();
@@ -320,10 +332,12 @@ async function act(d){
     case "csv":csv();break;
     case "clearq":V.q="";render();break;
     case "force":{
-      const r=runOf(d.m); if(!r)return;
-      if(!confirm("Force finish "+r.die+" on "+d.m+"?")) return;
-      if(r.paused) await pushEvent({type:"RESUME",die:r.die,machine:d.m,stage:r.stage});
-      await pushEvent({type:"END",die:r.die,machine:d.m,stage:r.stage,reason:"Force closed by supervisor"});
+      const r=runOfDie(d.d); if(!r) return;
+      const m=machineBy(r.machine)||{code:r.machine,name:r.machine};
+      if(!confirm("Force finish "+r.die+" on "+m.code+" "+m.name+"?")) return;
+      if(r.paused) await pushEvent({type:"RESUME",die:r.die,machine:r.machine,stage:r.stage});
+      await pushEvent({type:"END",die:r.die,machine:r.machine,stage:r.stage,
+        reason:"Force closed by supervisor"});
       render(); break;
     }
     case "adddie":{

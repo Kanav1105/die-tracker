@@ -2,8 +2,8 @@
   "name": "Die Tracker \u2014 Shop Floor",
   "short_name": "Die Tracker",
   "description": "Press die production tracking terminal",
-  "start_url": "./index.html",
-  "scope": "./",
+  "start_url": "./floor.html",
+  "scope": "./floor.html",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#12140F",
@@ -29,5 +29,5 @@
       "purpose": "maskable"
     }
   ],
-  "id": "/die-tracker/index.html"
+  "id": "/die-tracker/floor.html"
 }

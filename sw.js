@@ -1,8 +1,8 @@
 /* Die Tracker service worker.
    Bump CACHE on every deploy or tablets will keep the old build. */
-const CACHE = "die-tracker-v3";
+const CACHE = "die-tracker-v10";
 const SHELL = [
-  "./", "./index.html", "./manager.html", "./core.js",
+  "./", "./index.html", "./floor.html", "./manager.html", "./core.js",
   "./manifest.json", "./manager-manifest.json",
   "./icon-192.png", "./icon-512.png", "./icon-maskable-512.png",
   "./icon-mgr-192.png", "./icon-mgr-512.png", "./icon-mgr-maskable-512.png"
@@ -32,7 +32,7 @@ self.addEventListener("fetch", e => {
         const copy = r.clone();
         caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
         return r;
-      }).catch(() => caches.match(e.request).then(r => r || caches.match("./index.html")))
+      }).catch(() => caches.match(e.request).then(r => r || caches.match("./floor.html")))
     );
     return;
   }

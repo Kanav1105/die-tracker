@@ -4,7 +4,7 @@
   "description": "Die production tracking, manager view",
   "id": "/die-tracker/manager.html",
   "start_url": "./manager.html",
-  "scope": "./",
+  "scope": "./manager.html",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#E8E4D9",

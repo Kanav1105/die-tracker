@@ -3,8 +3,13 @@
 Shop floor production tracking for press stamping dies. Installable PWA, backed by Supabase,
 live across every tablet.
 
-**Operator terminal:** https://kanav1105.github.io/die-tracker/
+**Landing page:** https://kanav1105.github.io/die-tracker/
+**Operator terminal:** https://kanav1105.github.io/die-tracker/floor.html
 **Manager view:** https://kanav1105.github.io/die-tracker/manager.html
+
+The operator app moved from `index.html` to `floor.html`. `index.html` is now a plain chooser
+page that belongs to neither app. This is required: two PWAs cannot share a scope, or Android
+Chrome treats the second as a page inside the first and refuses to install it.
 
 ---
 
