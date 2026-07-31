@@ -1,9 +1,10 @@
 /* Die Tracker service worker.
    Bump CACHE on every deploy or tablets will keep the old build. */
-const CACHE = "die-tracker-v10";
+const CACHE = "die-tracker-v11";
 const SHELL = [
   "./", "./index.html", "./floor.html", "./manager.html", "./core.js",
   "./manifest.json", "./manager-manifest.json",
+  "./logo.png", "./favicon.png",
   "./icon-192.png", "./icon-512.png", "./icon-maskable-512.png",
   "./icon-mgr-192.png", "./icon-mgr-512.png", "./icon-mgr-maskable-512.png"
 ];
