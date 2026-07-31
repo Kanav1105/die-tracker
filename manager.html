@@ -220,7 +220,7 @@ function office(){
         const multi=isMultiDie(m.code), rs=runsOn(m.code), r=multi?null:rs[0];
         const cls=multi?(rs.length?"run":""):(r?(r.paused?"pau":"run"):"");
       return `<div class="mcard ${cls}"><h3>${esc(m.name)}</h3>
-        <div class="k">${esc(m.code)}${multi?" · multiple dies allowed":""}</div>
+        <div class="k">${esc(m.code)}</div>
         ${multi
           ? (rs.length
               ? rs.map(x=>`<div class="v">${esc(x.die)}
