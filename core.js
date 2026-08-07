@@ -146,11 +146,18 @@ const IDEAL_MACHINES = {
   // 11 Surface Correction, 12 Trim Correction, 14 ECN Machining, 15 Drilling:
   // no rule set, so any machine is accepted without warning.
 };
-/* Machines that can hold several dies at the same time. Outsourcing is not a
-   physical machine: many dies can sit at a vendor simultaneously, so the
-   one-die-per-machine rule does not apply to it. */
-const MULTI_DIE_MACHINES = ["114"];             // 114 OS (Outsource)
+/* Machines that can hold several dies at the same time. Neither is a real
+   machine: NA covers operations with no machine (Fitting, Assembly, Heat
+   Treatment, Raw Casting) and OS is an outside vendor. Many dies can sit at
+   either simultaneously, so the one-die-per-machine rule does not apply. */
+const MULTI_DIE_MACHINES = ["100","114"];       // 100 NA · 114 OS (Outsource)
 const isMultiDie = code => MULTI_DIE_MACHINES.includes(String(code));
+
+/* Real machines only. These are the ones that represent capacity, so they are
+   what "x of y machines occupied" should count. NA and OS are excluded: a die
+   sitting at Assembly or at a vendor is not occupying shop floor capacity. */
+const realMachines  = () => MACHINES.filter(m=>!isMultiDie(m.code));
+const realOpenRuns  = () => computeRuns().filter(r=>!isMultiDie(r.machine));
 
 const needsMachine = n => !NO_MACHINE_STAGES.includes(Number(n));
 const idealFor     = n => IDEAL_MACHINES[Number(n)] || [];

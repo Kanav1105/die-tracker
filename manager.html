@@ -134,6 +134,12 @@ td.m,th.m{font-family:var(--mono);font-size:12.5px}
 .mcard h3{font-family:var(--disp);font-size:19px;margin:0 0 2px;text-transform:uppercase;letter-spacing:.03em}
 .mcard .k{font-family:var(--mono);font-size:11px;color:#6D7263}
 .mcard .v{font-family:var(--mono);font-size:15px;font-weight:600;margin-top:6px}
+.multilist{margin-top:6px;max-height:230px;overflow-y:auto}
+.mrow{display:flex;align-items:center;gap:8px;justify-content:space-between;
+padding:6px 0;border-bottom:1px solid #D6D0C0}
+.mrow:last-child{border-bottom:none}
+.mrow .dcode{font-family:var(--mono);font-size:14px;font-weight:600;display:block}
+.mrow .k{display:block}
 .obtn{font-family:var(--disp);font-size:14px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:9px 14px;
 border:1.5px solid var(--paperInk);background:none;color:var(--paperInk);border-radius:var(--r);cursor:pointer}
 .obtn:active{background:var(--paperInk);color:var(--paper)}
@@ -214,8 +220,11 @@ function office(){
   const err=dbErr?`<div class="warn">Database: ${esc(dbErr)}</div>`:"";
   if(V.tab==="machines"){
     const runs=openRuns();
-    body=`<p class="note"><b>${runs.length}</b> of ${MACHINES.length} machines occupied ·
-      <b>${runs.filter(x=>x.r.paused).length}</b> on hold · updates live</p><div class="sp"></div>
+    const real=realOpenRuns(), off=computeRuns().filter(r=>isMultiDie(r.machine));
+    body=`<p class="note"><b>${real.length}</b> of ${realMachines().length} machines occupied ·
+      <b>${runs.filter(x=>x.r.paused).length}</b> on hold${off.length
+        ? ` · <b>${off.length}</b> ${off.length===1?"die":"dies"} at NA or OS`:""} · updates live</p>
+      <div class="sp"></div>
       <div class="grid">${MACHINES.map(m=>{
         const multi=isMultiDie(m.code), rs=runsOn(m.code), r=multi?null:rs[0];
         const cls=multi?(rs.length?"run":""):(r?(r.paused?"pau":"run"):"");
@@ -223,12 +232,14 @@ function office(){
         <div class="k">${esc(m.code)}</div>
         ${multi
           ? (rs.length
-              ? rs.map(x=>`<div class="v">${esc(x.die)}
-                  <span class="k">${esc(x.stage+" "+stageName(x.stage))} · ${el(Date.now()-x.ts)}
-                  ${x.paused?" · on hold":""}</span>
-                  <button class="obtn dan" style="padding:4px 8px;font-size:12px;margin-top:4px"
-                    data-a="force" data-d="${esc(x.die)}">Finish</button></div>`).join("")
-              : `<div class="v">— none out —</div>`)
+              ? `<div class="k" style="margin-top:4px">${rs.length} ${rs.length===1?"die":"dies"}</div>
+                 <div class="multilist">${rs.map(x=>`<div class="mrow">
+                   <div><span class="dcode">${esc(x.die)}</span>
+                     <span class="k">${esc(x.stage+" "+stageName(x.stage))} · ${el(Date.now()-x.ts)}${x.paused?" · on hold":""}</span></div>
+                   <button class="obtn dan" style="padding:3px 8px;font-size:11px"
+                     data-a="force" data-d="${esc(x.die)}">Finish</button>
+                 </div>`).join("")}</div>`
+              : `<div class="v">— none —</div>`)
           : `<div class="v">${r?esc(r.die):"— idle —"}</div>
              <div class="k">${r?esc(r.stage+" "+stageName(r.stage))+" · "+el(Date.now()-r.ts):"available"}</div>
              ${r?`<div class="sp" style="height:10px"></div>

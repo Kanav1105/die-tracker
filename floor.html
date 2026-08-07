@@ -403,7 +403,7 @@ function floor(){
   if(V.view==="machine"){
     if(!V.die||!V.pickN){V.view="home";return floor()}
     const ideal=idealFor(V.pickN);
-    const multi=MACHINES.filter(m=>isMultiDie(m.code));
+    const multi=MACHINES.filter(m=>isMultiDie(m.code)&&m.code!==NA_MACHINE);
     const tiles=(ideal.length&&!V.showAllMach)
       ? ideal.map(c=>machineBy(c)).filter(Boolean).concat(multi)
       : MACHINES.filter(m=>m.code!==NA_MACHINE);
