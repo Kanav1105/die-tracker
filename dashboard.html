@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0C1026">
+<title>Die Tracker — Dashboard</title>
+<link rel="manifest" href="./dashboard-manifest.json">
+<link rel="icon" type="image/png" href="./favicon.png">
+<link rel="apple-touch-icon" href="./icon-boss-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="DT Dashboard">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#0C1026;--panel:#141A38;--panel2:#1B2247;--line:#2B3260;--chalk:#EDEEF5;
+--dim:#8C93B8;--gold:#D4A83C;--red:#E05B5B;--green:#3FBE72;--amber:#E8973F;
+--disp:"Barlow Condensed",Impact,sans-serif;--body:"Barlow","Helvetica Neue",Arial,sans-serif;
+--mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;--r:5px}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;min-height:100%}
+body{background:var(--ink);color:var(--chalk);font-family:var(--body)}
+#gate{position:fixed;inset:0;z-index:80;background:var(--ink);display:grid;place-items:center;padding:24px}
+#gate .box{width:100%;max-width:360px}
+.eyebrow{font-family:var(--disp);font-size:13px;letter-spacing:.22em;text-transform:uppercase;color:var(--dim);margin:0 0 4px}
+h1{font-family:var(--disp);font-weight:700;font-size:30px;letter-spacing:.03em;text-transform:uppercase;margin:0 0 18px;color:var(--chalk)}
+label{display:block;font-family:var(--disp);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin:0 0 5px}
+input{font-family:var(--mono);font-size:15px;padding:11px 12px;border:1.5px solid var(--line);border-radius:var(--r);background:var(--panel2);color:var(--chalk);width:100%}
+.obtn{font-family:var(--disp);font-size:14px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:12px 16px;border:1.5px solid var(--gold);background:none;color:var(--gold);border-radius:var(--r);cursor:pointer;width:100%}
+.obtn:active{background:var(--gold);color:var(--ink)}
+.err{color:var(--red);font-size:13px;margin-top:8px;min-height:18px}
+.note{font-size:13px;color:var(--dim);line-height:1.6;margin-top:18px}
+.note a{color:var(--gold)}
+header{display:flex;align-items:center;gap:9px;padding:14px 22px;border-bottom:1px solid var(--line);background:var(--panel)}
+.brand{display:flex;align-items:center;gap:9px}
+.brand img{width:26px;height:26px;border-radius:50%}
+.brand span{font-family:var(--disp);font-weight:700;letter-spacing:.14em;text-transform:uppercase;font-size:15px}
+.brand b{color:var(--gold)}
+.spacer{flex:1}
+.chip{font-family:var(--mono);font-size:11.5px;font-weight:600;padding:6px 9px;border:1px solid var(--line);border-radius:var(--r);color:var(--dim);background:var(--panel2);cursor:pointer}
+.chip.bad{color:#F0A0A0;border-color:#5A2020}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;margin-right:5px}
+.dot.off{background:var(--red)}
+main{padding:22px;max-width:1180px;margin:0 auto}
+.range{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap}
+.range button{font-family:var(--disp);font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+padding:8px 14px;border:1px solid var(--line);background:var(--panel2);color:var(--dim);border-radius:var(--r);cursor:pointer}
+.range button.on{background:var(--gold);color:var(--ink);border-color:var(--gold)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:26px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:18px}
+.kpi .k{font-family:var(--disp);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+.kpi .v{font-family:var(--mono);font-size:32px;font-weight:700;margin-top:6px;color:var(--chalk)}
+.kpi .v small{font-size:15px;color:var(--dim);font-weight:500}
+.kpi.warn .v{color:var(--amber)}
+.kpi.good .v{color:var(--green)}
+.section{margin-bottom:30px}
+.sechead{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:6px}
+h2{font-family:var(--disp);font-size:19px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;margin:0;color:var(--chalk)}
+.sub{font-size:12.5px;color:var(--dim)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px}
+.bar-row{display:grid;grid-template-columns:150px 1fr 90px;gap:12px;align-items:center;padding:8px 0}
+.bar-row+.bar-row{border-top:1px solid var(--line)}
+.bar-label{font-size:13.5px;color:var(--chalk);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar-label .code{font-family:var(--mono);font-size:11px;color:var(--dim);display:block}
+.bar-track{background:var(--panel2);border-radius:3px;height:20px;overflow:hidden}
+.bar-fill{height:100%;border-radius:3px;transition:width .4s ease}
+.bar-val{font-family:var(--mono);font-size:13px;color:var(--dim);text-align:right}
+.bar-val b{color:var(--chalk);font-size:14px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:760px){.grid2{grid-template-columns:1fr}}
+.empty{color:var(--dim);font-size:13.5px;padding:14px 0}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{font-family:var(--disp);font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;text-align:left;
+padding:8px 10px;border-bottom:1.5px solid var(--line);color:var(--dim);white-space:nowrap}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+td.m{font-family:var(--mono);font-size:12.5px}
+.tag{display:inline-block;font-family:var(--mono);font-size:11px;font-weight:600;padding:3px 7px;border-radius:2px}
+.tag.g{background:rgba(63,190,114,.18);color:#7BE0A0}
+.tag.a{background:rgba(232,151,63,.18);color:#F0B372}
+.foot{font-size:12px;color:var(--dim);margin-top:30px;padding-top:16px;border-top:1px solid var(--line);line-height:1.6}
+::-webkit-scrollbar{width:8px}::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+</style>
+</head>
+<body>
+<div id="gate">
+  <div class="box">
+    <div class="eyebrow">Die Tracker</div>
+    <h1>Dashboard</h1>
+    <label for="pw">Password</label>
+    <input id="pw" type="password" autocomplete="current-password" placeholder="••••••••">
+    <div class="err" id="pwerr"></div>
+    <div style="height:14px"></div>
+    <button class="obtn" id="pwgo">Enter</button>
+    <p class="note">Live status and data entry are at
+      <a href="./manager.html">manager.html</a>. This page is read-only analytics.</p>
+  </div>
+</div>
+
+<div id="app" style="display:none">
+  <header>
+    <div class="brand"><img src="./logo.png" alt=""><span>Die&nbsp;<b>Tracker</b> <em style="font-style:normal;color:var(--dim)">· Dashboard</em></span></div>
+    <div class="spacer"></div>
+    <div class="chip" id="netchip"><span class="dot" id="netdot"></span><span id="nettext">…</span></div>
+    <div class="chip" data-a="logout">LOG OUT</div>
+  </header>
+  <main id="main"><p class="eyebrow" style="padding:20px">Connecting…</p></main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="./core.js"></script>
+<script>
+/* ============================================================================
+   DASHBOARD PASSWORD — a convenience gate, not security. Same caveat as
+   manager.html: this sits in JavaScript anyone can read with View Source.
+   Give it out only to whoever should see plant-wide numbers.
+   CHANGE IT, then commit and bump CACHE in sw.js.
+   ============================================================================ */
+const DASH_PASSWORD  = "boardroom2026";
+const SESSION_HOURS  = 24;
+
+function unlocked(){
+  const v = LS.get("dt:dash");
+  return v && (Date.now()-Number(v)) < SESSION_HOURS*3600*1000;
+}
+function openApp(){
+  document.getElementById("gate").style.display="none";
+  document.getElementById("app").style.display="block";
+  boot();
+}
+function tryPw(){
+  const el=document.getElementById("pw"), err=document.getElementById("pwerr");
+  if(el.value===DASH_PASSWORD){ LS.set("dt:dash",String(Date.now())); openApp(); }
+  else { err.textContent="Wrong password."; el.value=""; el.focus(); }
+}
+document.getElementById("pwgo").onclick=tryPw;
+document.getElementById("pw").addEventListener("keydown",e=>{if(e.key==="Enter")tryPw();});
+document.querySelector('[data-a="logout"]').onclick=()=>{ LS.set("dt:dash",""); location.reload(); };
+
+/* ============================================================================
+   DATA
+   Live counts (dies on hold, dies at NA/OS right now) come from core.js's
+   normal connect(), same as manager.html. Historical aggregates come from
+   the SQL views, queried directly — these are not limited by HISTORY_DAYS
+   and do the heavy lifting in the database instead of the browser.
+   ============================================================================ */
+let RANGE_DAYS = 30;
+let VIEWDATA = { holds:[], stageVisits:[], occupancy:[], leadtime:[], queue:[] };
+let dashErr = null;
+
+async function loadViews(){
+  const p = { days: RANGE_DAYS };
+  try{
+    const [holds, occ, lead, queue] = await Promise.all([
+      sb.rpc("f_hold_summary", p),
+      sb.rpc("f_machine_occupancy", p),
+      sb.rpc("f_die_leadtime", p),
+      sb.rpc("f_queue_by_stage", p)
+    ]);
+    for(const r of [holds,occ,lead,queue]) if(r.error) throw r.error;
+    const num = (rows,keys)=> (rows||[]).map(r=>{
+      const o={...r}; keys.forEach(k=>{ if(o[k]!=null) o[k]=Number(o[k]); }); return o; });
+    VIEWDATA = {
+      holds:      num(holds.data, ["total_hours","total_days","occurrences"]),
+      occupancy:  num(occ.data,   ["occupied_hours","visits"]),
+      leadtime:   num(lead.data,  ["elapsed_days","touch_days","outsourced_days"]),
+      queue:      num(queue.data, ["avg_queue_hours","max_queue_hours","data_points"])
+    };
+    dashErr = null;
+  }catch(e){ dashErr = e.message || String(e); }
+}
+
+async function boot(){
+  await connect();          // core.js: loads STAGES/MACHINES/DIES/EVENTS, opens realtime
+  await loadViews();
+  renderDash();
+  setInterval(async()=>{ await loadViews(); renderDash(); }, 60000);
+}
+
+/* ---------------------------------------------------------------- render */
+function bar(rows, opts){
+  if(!rows.length) return `<p class="empty">${opts.empty}</p>`;
+  const max = Math.max(...rows.map(r=>r.v), 0.001);
+  return rows.map(r=>`
+    <div class="bar-row">
+      <div class="bar-label">${esc(r.label)}${r.sub?`<span class="code">${esc(r.sub)}</span>`:""}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${Math.max(3,r.v/max*100)}%;background:${r.color||"var(--gold)"}"></div></div>
+      <div class="bar-val"><b>${r.big}</b> ${r.small||""}</div>
+    </div>`).join("");
+}
+
+function renderDash(){
+  if(dashErr){
+    document.getElementById("main").innerHTML =
+      `<div class="card" style="border-color:var(--red)">
+        <b style="color:var(--red)">Could not load analytics:</b> ${esc(dashErr)}<br>
+        <span class="sub">Most likely the views have not been created yet. Run dashboard_views.sql in the Supabase SQL Editor, including the function definitions at the end.</span>
+      </div>`;
+    paintNet(); return;
+  }
+
+  const runsNow = openRuns();
+  const onHold = runsNow.filter(x=>x.r.paused).length;
+  const atNAOS = runsNow.filter(x=>isMultiDie(x.r.machine)).length;
+  const occupiedReal = realOpenRuns().length;
+  const realTotal = realMachines().length;
+
+  const lt = VIEWDATA.leadtime.filter(d=>d.elapsed_days!=null && d.elapsed_days>0);
+  const avgTouch = lt.length
+    ? (lt.reduce((s,d)=>s+ (d.touch_days/d.elapsed_days), 0)/lt.length*100) : null;
+  const osDays = lt.reduce((s,d)=>s+Number(d.outsourced_days||0),0);
+
+  const holdDaysTotal = VIEWDATA.holds.reduce((s,h)=>s+Number(h.total_days||0),0);
+
+  const kpis = `
+    <div class="kpis">
+      <div class="kpi"><div class="k">Dies in progress</div><div class="v">${runsNow.length}</div></div>
+      <div class="kpi ${onHold?"warn":""}"><div class="k">On hold right now</div><div class="v">${onHold}</div></div>
+      <div class="kpi"><div class="k">Machines occupied</div><div class="v">${occupiedReal}<small> / ${realTotal}</small></div></div>
+      <div class="kpi"><div class="k">At NA / outsourced</div><div class="v">${atNAOS}</div></div>
+      <div class="kpi ${avgTouch!=null&&avgTouch<20?"warn":""}"><div class="k">Avg touch % of lead time</div>
+        <div class="v">${avgTouch!=null?avgTouch.toFixed(0)+"%":"—"}</div></div>
+      <div class="kpi warn"><div class="k">Hold days, ${RANGE_DAYS}d window</div><div class="v">${holdDaysTotal.toFixed(1)}</div></div>
+      <div class="kpi"><div class="k">Outsourced days, ${RANGE_DAYS}d</div><div class="v">${osDays.toFixed(1)}</div></div>
+    </div>`;
+
+  const holdBars = bar(VIEWDATA.holds.map(h=>({
+      label:h.reason_label, sub:h.reason_code, v:Number(h.total_days),
+      big:h.total_days, small:"days", color: h.reason_code==="H09"?"var(--red)":"var(--gold)"
+    })), {empty:"No holds recorded yet."});
+
+  const occBars = bar(VIEWDATA.occupancy.slice(0,10).map(m=>({
+      label:m.machine_name, sub:m.machine_code, v:Number(m.occupied_hours),
+      big:(m.occupied_hours/24).toFixed(1), small:"days"
+    })), {empty:"No completed machine visits yet."});
+
+  const queueBars = bar(VIEWDATA.queue.map(q=>({
+      label:q.stage_name, sub:"stage "+q.stage_no, v:Number(q.avg_queue_hours),
+      big:(q.avg_queue_hours/24).toFixed(1), small:"days avg", color:"var(--amber)"
+    })), {empty:"Not enough completed stage transitions yet."});
+
+  const ltRows = [...VIEWDATA.leadtime]
+    .filter(d=>d.elapsed_days>0)
+    .sort((a,b)=>b.elapsed_days-a.elapsed_days).slice(0,12);
+  const ltTable = ltRows.length ? `<table><thead><tr>
+      <th>Die</th><th class="m">Elapsed</th><th class="m">Touch</th>
+      <th class="m">At vendor</th><th>Touch %</th>
+    </tr></thead><tbody>${ltRows.map(d=>{
+      const pct = d.touch_days/d.elapsed_days*100;
+      const os  = Number(d.outsourced_days||0);
+      return `<tr><td class="m"><b>${esc(d.die_code)}</b></td>
+        <td class="m">${d.elapsed_days.toFixed(1)}d</td>
+        <td class="m">${d.touch_days.toFixed(1)}d</td>
+        <td class="m">${os>0?os.toFixed(1)+"d":"—"}</td>
+        <td><span class="tag ${pct<25?"a":"g"}">${pct.toFixed(0)}%</span></td></tr>`;
+    }).join("")}</tbody></table>` : `<p class="empty">No die history yet.</p>`;
+
+  document.getElementById("main").innerHTML = `
+    <div class="range">
+      ${[7,30,90,365].map(d=>`<button class="${d===RANGE_DAYS?"on":""}" data-a="range" data-d="${d}">${d}d</button>`).join("")}
+    </div>
+    ${kpis}
+    <div class="section">
+      <div class="grid2">
+        <div>
+          <div class="sechead"><h2>Hold time by reason</h2><span class="sub">total days lost</span></div>
+          <div class="card">${holdBars}</div>
+        </div>
+        <div>
+          <div class="sechead"><h2>Queue time by stage</h2><span class="sub">average wait before the stage starts</span></div>
+          <div class="card">${queueBars}</div>
+        </div>
+      </div>
+    </div>
+    <div class="section">
+      <div class="sechead"><h2>Machine occupancy</h2><span class="sub">completed visits, real machines only, NA and OS excluded</span></div>
+      <div class="card">${occBars}</div>
+    </div>
+    <div class="section">
+      <div class="sechead"><h2>Longest-running dies</h2><span class="sub">elapsed time vs actual work time</span></div>
+      <div class="card">${ltTable}</div>
+    </div>
+    <p class="foot">
+      Touch % is time in a logged session divided by total elapsed time since the die's first event.
+      NA counts as touch, since assembly and fitting setups are real work. Time at an outside vendor
+      also sits inside a session, so it is broken out separately in the "at vendor" column and the
+      KPI above — subtract it if you want touch excluding outsourcing. Watch the trend, not the
+      absolute value.<br>
+      Queue figures come from completed stage transitions only. An open hold does count, measured
+      against the current time. The KPI cards above always reflect this moment; the charts respect
+      the selected date range.
+    </p>`;
+  paintNet();
+}
+
+document.querySelectorAll('[data-a="range"]').forEach; // (delegated below)
+document.getElementById("app").addEventListener("click", async (e)=>{
+  const b = e.target.closest("[data-a]"); if(!b) return;
+  if(b.dataset.a==="range"){ RANGE_DAYS=Number(b.dataset.d); await loadViews(); renderDash(); }
+});
+
+if(unlocked()) openApp(); else document.getElementById("pw").focus();
+</script>
+</body>
+</html>

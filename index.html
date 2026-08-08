@@ -28,13 +28,15 @@ text-transform:uppercase;font-size:14px;color:var(--dim)}
 .brand b{color:var(--yellow)}
 h1{font-family:var(--disp);font-weight:700;font-size:38px;letter-spacing:.03em;
 text-transform:uppercase;margin:0 0 22px}
-.cards{display:grid;gap:14px;grid-template-columns:1fr 1fr}
+.cards{display:grid;gap:14px;grid-template-columns:1fr 1fr 1fr}
+@media(max-width:860px){.cards{grid-template-columns:1fr 1fr}}
 @media(max-width:560px){.cards{grid-template-columns:1fr}}
 a.card{display:block;text-decoration:none;border-radius:5px;padding:26px 22px;
 border:1px solid var(--line);transition:transform .06s,filter .12s}
 a.card:active{transform:scale(.99);filter:brightness(1.08)}
 a.floor{background:var(--panel);color:var(--chalk);border-left:6px solid var(--yellow)}
 a.office{background:var(--paper);color:var(--paperInk);border-left:6px solid var(--paperInk)}
+a.boss{background:#141A38;color:#EDEEF5;border-left:6px solid #D4A83C}
 .k{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;opacity:.6}
 .t{font-family:var(--disp);font-size:27px;font-weight:700;letter-spacing:.03em;
 text-transform:uppercase;margin:6px 0 4px;line-height:1}
@@ -59,6 +61,11 @@ code{font-family:var(--mono);font-size:12px;color:var(--yellow)}
       <div class="k">Office</div>
       <div class="t">Manager</div>
       <div class="d">Live boards, die register, event log. Password required.</div>
+    </a>
+    <a class="card boss" href="./dashboard.html">
+      <div class="k">Leadership</div>
+      <div class="t">Dashboard</div>
+      <div class="d">Hold time, queue time, occupancy, lead time. Password required.</div>
     </a>
   </div>
   <p class="note">
