@@ -170,6 +170,12 @@ async function loadViews(){
   }catch(e){ dashErr = e.message || String(e); }
 }
 
+/* core.js calls render() unconditionally at the end of connect(). floor.html
+   and manager.html each define their own render(); this page needs one too,
+   or connect() throws "render is not defined" and boot() silently dies,
+   leaving the page stuck on "Connecting…" forever. */
+function render(){ renderDash(); }
+
 async function boot(){
   await connect();          // core.js: loads STAGES/MACHINES/DIES/EVENTS, opens realtime
   await loadViews();
