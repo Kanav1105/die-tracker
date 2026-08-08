@@ -23,7 +23,7 @@ let track=null, zx=null, detector=null, scanLoop=null, camTried=false;
 const REASONS=[{id:"H01",en:"No machine",hi:"मशीन नहीं"},{id:"H02",en:"Crane / shifting",hi:"क्रेन"},
 {id:"H03",en:"No program",hi:"प्रोग्राम नहीं"},{id:"H04",en:"No tooling",hi:"टूल नहीं"},
 {id:"H07",en:"Press busy",hi:"प्रेस व्यस्त"},{id:"H09",en:"Customer hold",hi:"ग्राहक"},
-{id:"H11",en:"Shift end",hi:"शिफ्ट समाप्त"},{id:"H12",en:"Die fouling",hi:"डाई फाउलिंग"}];
+{id:"H11",en:"Shift end",hi:"शिफ्ट समाप्त"},{id:"H12",en:"Die fouling",hi:"डाई फाउलिंग"},{id:"H13",en:"Under Breakdown",hi:""}{id:"H14",en:"Under Preventive Maintenance",hi:""}{id:"H15",en:"Lunch/Tea Break",hi:""}];
 /* Project leaders, alphabetical. "Team" stays first as the shared default. */
 const OPERATORS=["Team",
 "Ajay","Amit","Deepchandra","Deshdeepak","Devilal","Himanshu","Kishore","Krishna Murari",
