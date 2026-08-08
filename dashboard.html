@@ -231,7 +231,7 @@ function renderDash(){
     </div>`;
 
   const holdBars = bar(VIEWDATA.holds.map(h=>({
-      label:h.reason_label, sub:h.reason_code, v:Number(h.total_days),
+      label:h.reason_label, sub:null, v:Number(h.total_days),
       big:h.total_days, small:"days", color: h.reason_code==="H09"?"var(--red)":"var(--gold)"
     })), {empty:"No holds recorded yet."});
 
