@@ -279,7 +279,7 @@ function office(){
         <td><span class="tag ${e.type==="START"?"g":e.type==="END"?"n":"a"}">${e.type}</span></td>
         <td class="m">${esc(e.die||"")}</td><td class="m">${esc(e.machine||"")}</td>
         <td>${esc((machineBy(e.machine)||{}).name||"")}</td><td class="m">${e.stage||""}</td>
-        <td>${esc(stageName(e.stage))}</td><td>${esc(e.reason||"")}</td><td>${esc(e.by||"")}</td></tr>`).join("")
+        <td>${esc(stageName(e.stage))}</td><td>${esc((e.reason||"").replace(/^H\d+\s*/,""))}</td><td>${esc(e.by||"")}</td></tr>`).join("")
         :`<tr><td colspan="9" class="note">No events yet.</td></tr>`}</tbody></table>`;
   }
   if(V.tab==="setup"){
