@@ -373,7 +373,7 @@ function renderDash(){
   const dieListHtml = dieRows.length ? `<table><thead><tr>
       <th>Die</th><th>Operation</th><th>Part</th><th>State</th><th>Now at</th>
       <th class="m">Stages</th><th class="m">Elapsed</th><th class="m">Touch</th><th class="m">Hold</th><th></th>
-    </tr></thead><tbody>${dieRows.slice(0,60).map(d=>`<tr${d.die_code===SELDIE?' style="background:var(--panel2)"':""}>
+    </tr></thead><tbody>${dieRows.slice(0,30).map(d=>`<tr${d.die_code===SELDIE?' style="background:var(--panel2)"':""}>
       <td class="m"><b>${esc(d.die_code)}</b></td>
       <td>${esc(d.operation||"")}</td><td>${esc(d.part||"")}</td>
       <td><span class="tag ${d.state==="running"?"g":"a"}">${(d.state||"").toUpperCase()}</span></td>
@@ -385,7 +385,7 @@ function renderDash(){
       <td class="m">${Number(d.hold_days)>0?Number(d.hold_days).toFixed(1)+"d":"—"}</td>
       <td><button class="obtn" data-a="pickdie" data-c="${esc(d.die_code)}"
         style="width:auto;padding:5px 11px;font-size:12px">Journey</button></td></tr>`).join("")}
-    </tbody></table>${dieRows.length>60?`<p class="sub" style="margin-top:8px">Showing first 60 of ${dieRows.length}.</p>`:""}`
+    </tbody></table>${dieRows.length>30?`<p class="sub" style="margin-top:8px">Showing first 30 of ${dieRows.length}.</p>`:""}`
     : `<p class="empty">${DIELIST.length?"No die matches that search.":"No die activity in this window."}</p>`;
 
   let journeyHtml = "";
