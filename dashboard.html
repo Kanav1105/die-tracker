@@ -27,7 +27,7 @@ body{background:var(--ink);color:var(--chalk);font-family:var(--body)}
 h1{font-family:var(--disp);font-weight:700;font-size:30px;letter-spacing:.03em;text-transform:uppercase;margin:0 0 18px;color:var(--chalk)}
 label{display:block;font-family:var(--disp);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin:0 0 5px}
 input{font-family:var(--mono);font-size:15px;padding:11px 12px;border:1.5px solid var(--line);border-radius:var(--r);background:var(--panel2);color:var(--chalk);width:100%}
-.obtn{font-family:var(--disp);font-size:14px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:12px 16px;border:1.5px solid var(--gold);background:none;color:var(--gold);border-radius:var(--r);cursor:pointer;width:100%}
+.obtn{font-family:var(--disp);font-size:14px;font-weight:0;letter-spacing:.08em;text-transform:uppercase;padding:12px 16px;border:1.5px solid var(--gold);background:none;color:var(--gold);border-radius:var(--r);cursor:pointer;width:100%}
 .obtn:active{background:var(--gold);color:var(--ink)}
 .err{color:var(--red);font-size:13px;margin-top:8px;min-height:18px}
 .note{font-size:13px;color:var(--dim);line-height:1.6;margin-top:18px}
@@ -337,7 +337,7 @@ function renderDash(){
   const dieListHtml = dieRows.length ? `<table><thead><tr>
       <th>Die</th><th>Operation</th><th>Part</th><th>State</th><th>Now at</th>
       <th class="m">Stages</th><th class="m">Elapsed</th><th class="m">Touch</th><th class="m">Hold</th><th></th>
-    </tr></thead><tbody>${dieRows.slice(0,60).map(d=>`<tr${d.die_code===SELDIE?' style="background:var(--panel2)"':""}>
+    </tr></thead><tbody>${dieRows.slice(0,30).map(d=>`<tr${d.die_code===SELDIE?' style="background:var(--panel2)"':""}>
       <td class="m"><b>${esc(d.die_code)}</b></td>
       <td>${esc(d.operation||"")}</td><td>${esc(d.part||"")}</td>
       <td><span class="tag ${d.state==="running"?"g":"a"}">${(d.state||"").toUpperCase()}</span></td>
@@ -349,7 +349,7 @@ function renderDash(){
       <td class="m">${Number(d.hold_days)>0?Number(d.hold_days).toFixed(1)+"d":"—"}</td>
       <td><button class="obtn" data-a="pickdie" data-c="${esc(d.die_code)}"
         style="width:auto;padding:5px 11px;font-size:12px">Journey</button></td></tr>`).join("")}
-    </tbody></table>${dieRows.length>60?`<p class="sub" style="margin-top:8px">Showing first 60 of ${dieRows.length}.</p>`:""}`
+    </tbody></table>${dieRows.length>30?`<p class="sub" style="margin-top:8px">Showing first 30 of ${dieRows.length}.</p>`:""}`
     : `<p class="empty">${DIELIST.length?"No die matches that search.":"No die activity in this window."}</p>`;
 
   let journeyHtml = "";
