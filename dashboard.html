@@ -144,28 +144,61 @@ document.querySelector('[data-a="logout"]').onclick=()=>{ LS.set("dt:dash",""); 
    the SQL views, queried directly — these are not limited by HISTORY_DAYS
    and do the heavy lifting in the database instead of the browser.
    ============================================================================ */
-let RANGE_DAYS = 30;
-let VIEWDATA = { holds:[], stageVisits:[], occupancy:[], leadtime:[], queue:[] };
+/* Date window. FROM_TS/TO_TS are ISO strings; TO_TS null means "till date". */
+let RANGE_DAYS = 30;                 // kept for the quick buttons' active state
+let FROM_TS = null, TO_TS = null;    // null = derive from RANGE_DAYS
+let RANGE_LABEL = "30d";
+function windowFrom(){
+  if(FROM_TS) return new Date(FROM_TS).toISOString();
+  return new Date(Date.now()-RANGE_DAYS*864e5).toISOString();
+}
+function windowTo(){
+  return TO_TS ? new Date(TO_TS+"T23:59:59").toISOString() : new Date().toISOString();
+}
+function setQuick(days,label){ RANGE_DAYS=days; FROM_TS=null; TO_TS=null; RANGE_LABEL=label; }
+function startOf(kind){
+  const n=new Date();
+  if(kind==="wtd"){ const d=new Date(n); const dow=(d.getDay()+6)%7; d.setDate(d.getDate()-dow);
+    d.setHours(0,0,0,0); return d; }
+  if(kind==="mtd") return new Date(n.getFullYear(), n.getMonth(), 1);
+  if(kind==="ytd") return new Date(n.getFullYear(), 0, 1);
+  return n;
+}
+const isoDate = d => new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);
+let VIEWDATA = { holds:[], occupancy:[], leadtime:[], queue:[], mutil:[], dutil:[] };
+/* Denominator for utilisation. 24 = calendar time. Set to your real shift
+   pattern (8 one shift, 16 two shifts) so idle time means "could have been
+   running but wasn't", not "the factory was shut". */
+let HOURS_PER_DAY = Number(LS.get("dt:hpd")) || 24;
 let dashErr = null;
+let DIELIST = [], DIEQ = "", SELDIE = null, JOURNEY = [], DIEEVENTS = [];
+let JOURNEY_MODE = "stages";   // "stages" | "events"
+let JOURNEY_ALL  = false;      // true = ignore the date window for this die
 
 async function loadViews(){
-  const p = { days: RANGE_DAYS };
+  const p = { from_ts: windowFrom(), to_ts: windowTo() };
   try{
-    const [holds, occ, lead, queue] = await Promise.all([
+    const [holds, occ, lead, queue, mutil, dutil, dlist] = await Promise.all([
       sb.rpc("f_hold_summary", p),
       sb.rpc("f_machine_occupancy", p),
       sb.rpc("f_die_leadtime", p),
-      sb.rpc("f_queue_by_stage", p)
+      sb.rpc("f_queue_by_stage", p),
+      sb.rpc("f_machine_utilisation", { ...p, hours_per_day: HOURS_PER_DAY }),
+      sb.rpc("f_die_utilisation", p),
+      sb.rpc("f_die_list", p)
     ]);
-    for(const r of [holds,occ,lead,queue]) if(r.error) throw r.error;
+    for(const r of [holds,occ,lead,queue,mutil,dutil,dlist]) if(r.error) throw r.error;
     const num = (rows,keys)=> (rows||[]).map(r=>{
       const o={...r}; keys.forEach(k=>{ if(o[k]!=null) o[k]=Number(o[k]); }); return o; });
     VIEWDATA = {
       holds:      num(holds.data, ["total_hours","total_days","occurrences"]),
       occupancy:  num(occ.data,   ["occupied_hours","visits"]),
       leadtime:   num(lead.data,  ["elapsed_days","touch_days","outsourced_days"]),
-      queue:      num(queue.data, ["avg_queue_hours","max_queue_hours","data_points"])
+      queue:      num(queue.data, ["avg_queue_hours","max_queue_hours","data_points"]),
+      mutil:      num(mutil.data, ["available_hours","busy_hours","idle_hours","util_pct","visits"]),
+      dutil:      num(dutil.data, ["window_hours","active_hours","vacant_hours","util_pct","sessions"])
     };
+    DIELIST = num(dlist.data, ["stages_done","elapsed_days","touch_days","hold_days"]);
     dashErr = null;
   }catch(e){ dashErr = e.message || String(e); }
 }
@@ -175,6 +208,24 @@ async function loadViews(){
    or connect() throws "render is not defined" and boot() silently dies,
    leaving the page stuck on "Connecting…" forever. */
 function render(){ renderDash(); }
+
+async function loadJourney(){
+  if(!SELDIE){ JOURNEY=[]; DIEEVENTS=[]; return; }
+  const from = JOURNEY_ALL ? new Date(0).toISOString() : windowFrom();
+  const to   = JOURNEY_ALL ? new Date().toISOString() : windowTo();
+  try{
+    const [j,e] = await Promise.all([
+      sb.rpc("f_die_journey", { p_die: SELDIE, from_ts: from, to_ts: to }),
+      sb.rpc("f_die_events",  { p_die: SELDIE, from_ts: from, to_ts: to })
+    ]);
+    if(j.error) throw j.error; if(e.error) throw e.error;
+    JOURNEY   = (j.data||[]).map(r=>({...r,
+      duration_hours:Number(r.duration_hours), queue_before_hours:r.queue_before_hours==null?null:Number(r.queue_before_hours),
+      hold_hours:Number(r.hold_hours)}));
+    DIEEVENTS = e.data||[];
+    dashErr=null;
+  }catch(err){ dashErr = err.message || String(err); }
+}
 
 async function boot(){
   await connect();          // core.js: loads STAGES/MACHINES/DIES/EVENTS, opens realtime
@@ -226,12 +277,12 @@ function renderDash(){
       <div class="kpi"><div class="k">At NA / outsourced</div><div class="v">${atNAOS}</div></div>
       <div class="kpi ${avgTouch!=null&&avgTouch<20?"warn":""}"><div class="k">Avg touch % of lead time</div>
         <div class="v">${avgTouch!=null?avgTouch.toFixed(0)+"%":"—"}</div></div>
-      <div class="kpi warn"><div class="k">Hold days, ${RANGE_DAYS}d window</div><div class="v">${holdDaysTotal.toFixed(1)}</div></div>
-      <div class="kpi"><div class="k">Outsourced days, ${RANGE_DAYS}d</div><div class="v">${osDays.toFixed(1)}</div></div>
+      <div class="kpi warn"><div class="k">Hold days, selected range</div><div class="v">${holdDaysTotal.toFixed(1)}</div></div>
+      <div class="kpi"><div class="k">Outsourced days, range</div><div class="v">${osDays.toFixed(1)}</div></div>
     </div>`;
 
   const holdBars = bar(VIEWDATA.holds.map(h=>({
-      label:h.reason_label, sub:null, v:Number(h.total_days),
+      label:h.reason_label, sub:h.reason_code, v:Number(h.total_days),
       big:h.total_days, small:"days", color: h.reason_code==="H09"?"var(--red)":"var(--gold)"
     })), {empty:"No holds recorded yet."});
 
@@ -244,6 +295,119 @@ function renderDash(){
       label:q.stage_name, sub:"stage "+q.stage_no, v:Number(q.avg_queue_hours),
       big:(q.avg_queue_hours/24).toFixed(1), small:"days avg", color:"var(--amber)"
     })), {empty:"Not enough completed stage transitions yet."});
+
+  const utilBar = p => {
+    const pct = Math.max(0, Math.min(100, Number(p)||0));
+    const col = pct>=70?"var(--green)":pct>=40?"var(--gold)":"var(--amber)";
+    return `<div class="bar-track" style="height:14px"><div class="bar-fill"
+      style="width:${pct}%;background:${col}"></div></div>`;
+  };
+
+  const mUtilTable = (VIEWDATA.mutil||[]).length ? `<table><thead><tr>
+      <th>Machine</th><th class="m">Available</th><th class="m">Busy</th>
+      <th class="m">Idle</th><th style="width:130px">Utilisation</th><th class="m">%</th><th class="m">Jobs</th>
+    </tr></thead><tbody>${VIEWDATA.mutil.map(m=>`<tr>
+      <td><b>${esc(m.machine_name)}</b> <span class="sub">${esc(m.machine_code)}</span></td>
+      <td class="m">${(m.available_hours/24).toFixed(1)}d</td>
+      <td class="m">${(m.busy_hours/24).toFixed(1)}d</td>
+      <td class="m">${(m.idle_hours/24).toFixed(1)}d</td>
+      <td>${utilBar(m.util_pct)}</td>
+      <td class="m"><b>${Number(m.util_pct).toFixed(0)}%</b></td>
+      <td class="m">${m.visits}</td></tr>`).join("")}</tbody></table>`
+    : `<p class="empty">No completed machine activity in this range yet.</p>`;
+
+  const dUtilTable = (VIEWDATA.dutil||[]).slice(0,15).length ? `<table><thead><tr>
+      <th>Die</th><th class="m">Tracked</th><th class="m">Active</th>
+      <th class="m">Vacant</th><th style="width:130px">Utilisation</th><th class="m">%</th><th class="m">Ops</th>
+    </tr></thead><tbody>${VIEWDATA.dutil.slice(0,15).map(d=>`<tr>
+      <td class="m"><b>${esc(d.die_code)}</b></td>
+      <td class="m">${(d.window_hours/24).toFixed(1)}d</td>
+      <td class="m">${(d.active_hours/24).toFixed(1)}d</td>
+      <td class="m">${(d.vacant_hours/24).toFixed(1)}d</td>
+      <td>${utilBar(d.util_pct)}</td>
+      <td class="m"><b>${Number(d.util_pct).toFixed(0)}%</b></td>
+      <td class="m">${d.sessions}</td></tr>`).join("")}</tbody></table>`
+    : `<p class="empty">No die activity in this range yet.</p>`;
+
+  /* ---------------- die journey ---------------- */
+  const q = (DIEQ||"").trim().toUpperCase();
+  const dieRows = q
+    ? DIELIST.filter(d=>(d.die_code+" "+(d.part||"")+" "+(d.operation||"")).toUpperCase().includes(q))
+    : DIELIST;
+  const dieListHtml = dieRows.length ? `<table><thead><tr>
+      <th>Die</th><th>Operation</th><th>Part</th><th>State</th><th>Now at</th>
+      <th class="m">Stages</th><th class="m">Elapsed</th><th class="m">Touch</th><th class="m">Hold</th><th></th>
+    </tr></thead><tbody>${dieRows.slice(0,60).map(d=>`<tr${d.die_code===SELDIE?' style="background:var(--panel2)"':""}>
+      <td class="m"><b>${esc(d.die_code)}</b></td>
+      <td>${esc(d.operation||"")}</td><td>${esc(d.part||"")}</td>
+      <td><span class="tag ${d.state==="running"?"g":"a"}">${(d.state||"").toUpperCase()}</span></td>
+      <td>${d.current_stage?esc(d.current_stage_no+" "+d.current_stage):"—"}
+        ${d.current_machine?`<span class="sub">${esc(d.current_machine)}</span>`:""}</td>
+      <td class="m">${d.stages_done}</td>
+      <td class="m">${Number(d.elapsed_days).toFixed(1)}d</td>
+      <td class="m">${Number(d.touch_days).toFixed(1)}d</td>
+      <td class="m">${Number(d.hold_days)>0?Number(d.hold_days).toFixed(1)+"d":"—"}</td>
+      <td><button class="obtn" data-a="pickdie" data-c="${esc(d.die_code)}"
+        style="width:auto;padding:5px 11px;font-size:12px">Journey</button></td></tr>`).join("")}
+    </tbody></table>${dieRows.length>60?`<p class="sub" style="margin-top:8px">Showing first 60 of ${dieRows.length}.</p>`:""}`
+    : `<p class="empty">${DIELIST.length?"No die matches that search.":"No die activity in this window."}</p>`;
+
+  let journeyHtml = "";
+  if(SELDIE){
+    const totH = JOURNEY.reduce((s,r)=>s+Number(r.duration_hours||0),0);
+    const totQ = JOURNEY.reduce((s,r)=>s+Number(r.queue_before_hours||0),0);
+    const totHold = JOURNEY.reduce((s,r)=>s+Number(r.hold_hours||0),0);
+    const workH = totH - totHold;
+    const stagesTbl = JOURNEY.length ? `<table><thead><tr>
+        <th class="m">#</th><th>Stage</th><th>Machine</th><th class="m">Started</th><th class="m">Ended</th>
+        <th class="m">Queue before</th><th class="m">Duration</th><th class="m">Hold</th>
+        <th class="m">Working</th><th>By</th></tr></thead><tbody>
+      ${JOURNEY.map(r=>{
+        const work=Number(r.duration_hours)-Number(r.hold_hours);
+        return `<tr>
+        <td class="m">${r.seq}</td>
+        <td><b>${esc(r.stage_no+" "+(r.stage_name||""))}</b>${r.is_open?` <span class="tag g">OPEN</span>`:""}</td>
+        <td>${esc(r.machine_name||r.machine_code||"—")}</td>
+        <td class="m">${stamp(new Date(r.started_at).getTime())}</td>
+        <td class="m">${r.ended_at?stamp(new Date(r.ended_at).getTime()):"—"}</td>
+        <td class="m">${r.queue_before_hours==null?"—":(r.queue_before_hours/24).toFixed(1)+"d"}</td>
+        <td class="m">${(r.duration_hours/24).toFixed(1)}d</td>
+        <td class="m">${Number(r.hold_hours)>0?`<span style="color:var(--amber)">${(r.hold_hours/24).toFixed(1)}d</span>`:"—"}</td>
+        <td class="m"><b>${(work/24).toFixed(1)}d</b></td>
+        <td>${esc(r.operator||"")}</td></tr>`}).join("")}
+      </tbody></table>` : `<p class="empty">No stage visits for this die in the selected window.</p>`;
+
+    const eventsTbl = DIEEVENTS.length ? `<table><thead><tr>
+        <th class="m">When</th><th>Type</th><th>Stage</th><th>Machine</th><th>Reason</th><th>By</th><th class="m">Device</th>
+      </tr></thead><tbody>${DIEEVENTS.map(e=>`<tr>
+        <td class="m">${stamp(new Date(e.ts).getTime())}</td>
+        <td><span class="tag ${e.type==="START"?"g":e.type==="END"?"a":"a"}">${esc(e.type)}</span></td>
+        <td>${e.stage_no?esc(e.stage_no+" "+(e.stage_name||"")):"—"}</td>
+        <td>${esc(e.machine_name||e.machine_code||"—")}</td>
+        <td>${esc(e.reason||"")}</td><td>${esc(e.operator||"")}</td>
+        <td class="m sub">${esc(e.device_id||"")}</td></tr>`).join("")}</tbody></table>`
+      : `<p class="empty">No events for this die in the selected window.</p>`;
+
+    journeyHtml = `<div class="section">
+      <div class="sechead">
+        <h2>Journey — ${esc(SELDIE)}</h2>
+        <span class="sub">
+          <button class="${JOURNEY_MODE==="stages"?"on":""}" data-a="jmode" data-m="stages">Stage visits</button>
+          <button class="${JOURNEY_MODE==="events"?"on":""}" data-a="jmode" data-m="events">Every event</button>
+          <button class="${JOURNEY_ALL?"on":""}" data-a="jall">${JOURNEY_ALL?"Full history":"Within dates"}</button>
+          <button data-a="closedie">Close</button>
+        </span>
+      </div>
+      <div class="kpis" style="margin-bottom:14px">
+        <div class="kpi"><div class="k">Stage visits</div><div class="v">${JOURNEY.length}</div></div>
+        <div class="kpi"><div class="k">Total elapsed in stages</div><div class="v">${(totH/24).toFixed(1)}<small>d</small></div></div>
+        <div class="kpi warn"><div class="k">Of which on hold</div><div class="v">${(totHold/24).toFixed(1)}<small>d</small></div></div>
+        <div class="kpi good"><div class="k">Actual working time</div><div class="v">${(workH/24).toFixed(1)}<small>d</small></div></div>
+        <div class="kpi"><div class="k">Queue between stages</div><div class="v">${(totQ/24).toFixed(1)}<small>d</small></div></div>
+      </div>
+      <div class="card">${JOURNEY_MODE==="stages"?stagesTbl:eventsTbl}</div>
+    </div>`;
+  }
 
   const ltRows = [...VIEWDATA.leadtime]
     .filter(d=>d.elapsed_days>0)
@@ -263,8 +427,25 @@ function renderDash(){
 
   document.getElementById("main").innerHTML = `
     <div class="range">
-      ${[7,30,90,365].map(d=>`<button class="${d===RANGE_DAYS?"on":""}" data-a="range" data-d="${d}">${d}d</button>`).join("")}
+      ${[[7,"7d"],[30,"30d"],[90,"90d"],[365,"365d"]].map(([d,l])=>
+        `<button class="${!FROM_TS&&d===RANGE_DAYS?"on":""}" data-a="range" data-d="${d}" data-l="${l}">${l}</button>`).join("")}
+      ${[["wtd","WTD"],["mtd","MTD"],["ytd","YTD"]].map(([k,l])=>
+        `<button class="${RANGE_LABEL===l?"on":""}" data-a="period" data-k="${k}" data-l="${l}">${l}</button>`).join("")}
+      <span style="width:14px"></span>
+      <span class="sub">From</span>
+      <input type="date" id="fromd" value="${FROM_TS||isoDate(new Date(Date.now()-RANGE_DAYS*864e5))}"
+        style="width:150px;padding:7px 9px">
+      <span class="sub">to</span>
+      <input type="date" id="tod" value="${TO_TS||""}" placeholder="till date" style="width:150px;padding:7px 9px">
+      <button class="obtn" data-a="applydates" style="width:auto;padding:8px 14px">Apply</button>
+      ${(FROM_TS||TO_TS)?`<button data-a="cleardates">Clear</button>`:""}
+      <span style="width:14px"></span>
+      ${[[24,"24h/day"],[16,"2 shifts"],[8,"1 shift"]].map(([v,l])=>
+        `<button class="${v===HOURS_PER_DAY?"on":""}" data-a="hpd" data-v="${v}">${l}</button>`).join("")}
     </div>
+    <p class="sub" style="margin:-10px 0 18px">Showing
+      <b style="color:var(--chalk)">${FROM_TS?FROM_TS:isoDate(new Date(Date.now()-RANGE_DAYS*864e5))}</b>
+      to <b style="color:var(--chalk)">${TO_TS?TO_TS:"today"}</b></p>
     ${kpis}
     <div class="section">
       <div class="grid2">
@@ -283,6 +464,26 @@ function renderDash(){
       <div class="card">${occBars}</div>
     </div>
     <div class="section">
+      <div class="sechead"><h2>Die journey</h2>
+        <span class="sub">search a die, then open its full route</span></div>
+      <div class="card">
+        <input id="diesearch" placeholder="Search die code, part or operation…"
+          value="${esc(DIEQ)}" style="max-width:360px;margin-bottom:12px">
+        ${dieListHtml}
+      </div>
+    </div>
+    ${journeyHtml}
+    <div class="section">
+      <div class="sechead"><h2>Machine utilisation</h2>
+        <span class="sub">busy vs idle since each machine's first recorded use${HOURS_PER_DAY<24?`, against ${HOURS_PER_DAY}h/day`:", calendar hours"}</span></div>
+      <div class="card">${mUtilTable}</div>
+    </div>
+    <div class="section">
+      <div class="sechead"><h2>Die utilisation</h2>
+        <span class="sub">active vs vacant since each die's first recorded activity</span></div>
+      <div class="card">${dUtilTable}</div>
+    </div>
+    <div class="section">
       <div class="sechead"><h2>Longest-running dies</h2><span class="sub">elapsed time vs actual work time</span></div>
       <div class="card">${ltTable}</div>
     </div>
@@ -297,12 +498,37 @@ function renderDash(){
       the selected date range.
     </p>`;
   paintNet();
+  const s=document.getElementById("diesearch");
+  if(s){
+    s.oninput=()=>{ DIEQ=s.value; renderDash(); };
+    if(DIEQ){ s.focus(); s.setSelectionRange(s.value.length, s.value.length); }
+  }
 }
 
 document.querySelectorAll('[data-a="range"]').forEach; // (delegated below)
 document.getElementById("app").addEventListener("click", async (e)=>{
   const b = e.target.closest("[data-a]"); if(!b) return;
-  if(b.dataset.a==="range"){ RANGE_DAYS=Number(b.dataset.d); await loadViews(); renderDash(); }
+  const a=b.dataset.a;
+  if(a==="range"){ setQuick(Number(b.dataset.d), b.dataset.l);
+    await loadViews(); if(SELDIE) await loadJourney(); renderDash(); }
+  if(a==="period"){ const s=startOf(b.dataset.k);
+    FROM_TS=isoDate(s); TO_TS=null; RANGE_LABEL=b.dataset.l;
+    await loadViews(); if(SELDIE) await loadJourney(); renderDash(); }
+  if(a==="applydates"){
+    const f=document.getElementById("fromd"), t=document.getElementById("tod");
+    if(f&&f.value){ FROM_TS=f.value; TO_TS=(t&&t.value)?t.value:null; RANGE_LABEL="custom";
+      await loadViews(); if(SELDIE) await loadJourney(); renderDash(); }
+  }
+  if(a==="cleardates"){ setQuick(30,"30d");
+    await loadViews(); if(SELDIE) await loadJourney(); renderDash(); }
+  if(a==="pickdie"){ SELDIE=b.dataset.c; JOURNEY_MODE="stages";
+    await loadJourney(); renderDash();
+    const el=document.querySelector("h2"); if(el&&el.scrollIntoView) el.scrollIntoView({block:"start"}); }
+  if(a==="closedie"){ SELDIE=null; JOURNEY=[]; DIEEVENTS=[]; JOURNEY_ALL=false; renderDash(); }
+  if(a==="jmode"){ JOURNEY_MODE=b.dataset.m; renderDash(); }
+  if(a==="jall"){ JOURNEY_ALL=!JOURNEY_ALL; await loadJourney(); renderDash(); }
+  if(b.dataset.a==="hpd"){ HOURS_PER_DAY=Number(b.dataset.v); LS.set("dt:hpd",String(HOURS_PER_DAY));
+    await loadViews(); renderDash(); }
 });
 
 if(unlocked()) openApp(); else document.getElementById("pw").focus();
