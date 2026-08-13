@@ -55,7 +55,20 @@ padding:8px 14px;border:1px solid var(--line);background:var(--panel2);color:var
 .kpi.warn .v{color:var(--amber)}
 .kpi.good .v{color:var(--green)}
 .section{margin-bottom:30px}
-.sechead{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:6px}
+.sechead{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px}
+.sechead .left{display:flex;align-items:center;gap:10px;cursor:pointer;flex:1;min-width:0}
+.sechead .left:hover h2{color:var(--gold)}
+.chev{width:20px;height:20px;flex:0 0 auto;color:var(--dim);transition:transform .18s}
+.chev.open{transform:rotate(90deg);color:var(--gold)}
+.count{font-family:var(--mono);font-size:11px;color:var(--dim);background:var(--panel2);
+padding:2px 7px;border-radius:9px;border:1px solid var(--line)}
+.jbtn{font-family:var(--disp);font-size:12.5px;font-weight:600;letter-spacing:.06em;
+text-transform:uppercase;padding:6px 12px;border:1px solid var(--line);background:var(--panel2);
+color:var(--dim);border-radius:var(--r);cursor:pointer;margin-left:6px}
+.jbtn:hover{color:var(--chalk)}
+.jbtn.on{background:var(--gold);color:var(--ink);border-color:var(--gold)}
+.jbtn.close{border-color:#5A2A2A;color:#E08B8B}
+.jbtn.close:hover{background:var(--red);color:#fff;border-color:var(--red)}
 h2{font-family:var(--disp);font-size:19px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;margin:0;color:var(--chalk)}
 .sub{font-size:12.5px;color:var(--dim)}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px}
@@ -172,6 +185,13 @@ let VIEWDATA = { holds:[], occupancy:[], leadtime:[], queue:[], mutil:[], dutil:
 let HOURS_PER_DAY = Number(LS.get("dt:hpd")) || 24;
 let dashErr = null;
 let DIELIST = [], DIEQ = "", SELDIE = null, JOURNEY = [], DIEEVENTS = [];
+/* Which sections are expanded. Persisted per device so each board member keeps
+   their own layout. */
+const SEC_DEFAULT = {kpi:true, journey:true, holds:true, queue:true,
+                     occ:false, mutil:false, dutil:false, lead:false};
+let OPEN = (()=>{ try{ return {...SEC_DEFAULT, ...JSON.parse(LS.get("dt:open")||"{}")}; }
+                  catch(e){ return {...SEC_DEFAULT}; } })();
+function toggleSec(k){ OPEN[k]=!OPEN[k]; LS.set("dt:open", JSON.stringify(OPEN)); }
 let JOURNEY_MODE = "stages";   // "stages" | "events"
 let JOURNEY_ALL  = false;      // true = ignore the date window for this die
 
@@ -329,6 +349,22 @@ function renderDash(){
       <td class="m">${d.sessions}</td></tr>`).join("")}</tbody></table>`
     : `<p class="empty">No die activity in this range yet.</p>`;
 
+  /* collapsible section wrapper */
+  const CHEV = `<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>`;
+  const sec = (key,title,subtitle,body,badge,extraId) =>
+    `<div class="section"${extraId?` id="${extraId}"`:""}>
+      <div class="sechead">
+        <div class="left" data-a="sec" data-k="${key}">
+          ${CHEV.replace('class="chev"', 'class="chev'+(OPEN[key]?" open":"")+'"')}
+          <h2>${title}</h2>
+          ${badge!=null?`<span class="count">${badge}</span>`:""}
+        </div>
+        <span class="sub">${subtitle||""}</span>
+      </div>
+      ${OPEN[key]?body:""}
+    </div>`;
+
   /* ---------------- die journey ---------------- */
   const q = (DIEQ||"").trim().toUpperCase();
   const dieRows = q
@@ -337,7 +373,7 @@ function renderDash(){
   const dieListHtml = dieRows.length ? `<table><thead><tr>
       <th>Die</th><th>Operation</th><th>Part</th><th>State</th><th>Now at</th>
       <th class="m">Stages</th><th class="m">Elapsed</th><th class="m">Touch</th><th class="m">Hold</th><th></th>
-    </tr></thead><tbody>${dieRows.slice(0,30).map(d=>`<tr${d.die_code===SELDIE?' style="background:var(--panel2)"':""}>
+    </tr></thead><tbody>${dieRows.slice(0,60).map(d=>`<tr${d.die_code===SELDIE?' style="background:var(--panel2)"':""}>
       <td class="m"><b>${esc(d.die_code)}</b></td>
       <td>${esc(d.operation||"")}</td><td>${esc(d.part||"")}</td>
       <td><span class="tag ${d.state==="running"?"g":"a"}">${(d.state||"").toUpperCase()}</span></td>
@@ -349,7 +385,7 @@ function renderDash(){
       <td class="m">${Number(d.hold_days)>0?Number(d.hold_days).toFixed(1)+"d":"—"}</td>
       <td><button class="obtn" data-a="pickdie" data-c="${esc(d.die_code)}"
         style="width:auto;padding:5px 11px;font-size:12px">Journey</button></td></tr>`).join("")}
-    </tbody></table>${dieRows.length>30?`<p class="sub" style="margin-top:8px">Showing first 30 of ${dieRows.length}.</p>`:""}`
+    </tbody></table>${dieRows.length>60?`<p class="sub" style="margin-top:8px">Showing first 60 of ${dieRows.length}.</p>`:""}`
     : `<p class="empty">${DIELIST.length?"No die matches that search.":"No die activity in this window."}</p>`;
 
   let journeyHtml = "";
@@ -388,14 +424,17 @@ function renderDash(){
         <td class="m sub">${esc(e.device_id||"")}</td></tr>`).join("")}</tbody></table>`
       : `<p class="empty">No events for this die in the selected window.</p>`;
 
-    journeyHtml = `<div class="section">
+    journeyHtml = `<div class="section" id="journeysec">
       <div class="sechead">
-        <h2>Journey — ${esc(SELDIE)}</h2>
-        <span class="sub">
-          <button class="${JOURNEY_MODE==="stages"?"on":""}" data-a="jmode" data-m="stages">Stage visits</button>
-          <button class="${JOURNEY_MODE==="events"?"on":""}" data-a="jmode" data-m="events">Every event</button>
-          <button class="${JOURNEY_ALL?"on":""}" data-a="jall">${JOURNEY_ALL?"Full history":"Within dates"}</button>
-          <button data-a="closedie">Close</button>
+        <div class="left" style="cursor:default">
+          <h2>Journey — ${esc(SELDIE)}</h2>
+          <span class="count">${JOURNEY.length} stage${JOURNEY.length===1?"":"s"}</span>
+        </div>
+        <span>
+          <button class="jbtn ${JOURNEY_MODE==="stages"?"on":""}" data-a="jmode" data-m="stages">Stage visits</button>
+          <button class="jbtn ${JOURNEY_MODE==="events"?"on":""}" data-a="jmode" data-m="events">Every event</button>
+          <button class="jbtn ${JOURNEY_ALL?"on":""}" data-a="jall">${JOURNEY_ALL?"Full history":"Within dates"}</button>
+          <button class="jbtn close" data-a="closedie">Close</button>
         </span>
       </div>
       <div class="kpis" style="margin-bottom:14px">
@@ -446,47 +485,33 @@ function renderDash(){
     <p class="sub" style="margin:-10px 0 18px">Showing
       <b style="color:var(--chalk)">${FROM_TS?FROM_TS:isoDate(new Date(Date.now()-RANGE_DAYS*864e5))}</b>
       to <b style="color:var(--chalk)">${TO_TS?TO_TS:"today"}</b></p>
-    ${kpis}
-    <div class="section">
-      <div class="grid2">
-        <div>
-          <div class="sechead"><h2>Hold time by reason</h2><span class="sub">total days lost</span></div>
-          <div class="card">${holdBars}</div>
-        </div>
-        <div>
-          <div class="sechead"><h2>Queue time by stage</h2><span class="sub">average wait before the stage starts</span></div>
-          <div class="card">${queueBars}</div>
-        </div>
-      </div>
+    <div class="sechead" style="margin-bottom:10px">
+      <div class="left" data-a="sec" data-k="kpi">
+        ${CHEV.replace('class="chev"', 'class="chev'+(OPEN.kpi?" open":"")+'"')}
+        <h2>Current status</h2></div>
+      <span class="sub">live — always this moment, ignores the date range</span>
     </div>
-    <div class="section">
-      <div class="sechead"><h2>Machine occupancy</h2><span class="sub">completed visits, real machines only, NA and OS excluded</span></div>
-      <div class="card">${occBars}</div>
-    </div>
-    <div class="section">
-      <div class="sechead"><h2>Die journey</h2>
-        <span class="sub">search a die, then open its full route</span></div>
-      <div class="card">
+    ${OPEN.kpi?kpis:""}
+    ${sec("journey","Die journey","search a die, then open its full route",
+      `<div class="card">
         <input id="diesearch" placeholder="Search die code, part or operation…"
           value="${esc(DIEQ)}" style="max-width:360px;margin-bottom:12px">
         ${dieListHtml}
-      </div>
-    </div>
+      </div>`, DIELIST.length)}
     ${journeyHtml}
-    <div class="section">
-      <div class="sechead"><h2>Machine utilisation</h2>
-        <span class="sub">busy vs idle since each machine's first recorded use${HOURS_PER_DAY<24?`, against ${HOURS_PER_DAY}h/day`:", calendar hours"}</span></div>
-      <div class="card">${mUtilTable}</div>
-    </div>
-    <div class="section">
-      <div class="sechead"><h2>Die utilisation</h2>
-        <span class="sub">active vs vacant since each die's first recorded activity</span></div>
-      <div class="card">${dUtilTable}</div>
-    </div>
-    <div class="section">
-      <div class="sechead"><h2>Longest-running dies</h2><span class="sub">elapsed time vs actual work time</span></div>
-      <div class="card">${ltTable}</div>
-    </div>
+    ${sec("holds","Hold time by reason","total days lost",
+      `<div class="card">${holdBars}</div>`, VIEWDATA.holds.length)}
+    ${sec("queue","Queue time by stage","average wait before the stage starts",
+      `<div class="card">${queueBars}</div>`, VIEWDATA.queue.length)}
+    ${sec("occ","Machine occupancy","completed visits, real machines only, NA and OS excluded",
+      `<div class="card">${occBars}</div>`, (VIEWDATA.occupancy||[]).length)}
+    ${sec("mutil","Machine utilisation",
+      `busy vs idle since each machine's first recorded use${HOURS_PER_DAY<24?`, against ${HOURS_PER_DAY}h/day`:", calendar hours"}`,
+      `<div class="card">${mUtilTable}</div>`, (VIEWDATA.mutil||[]).length)}
+    ${sec("dutil","Die utilisation","active vs vacant since each die's first recorded activity",
+      `<div class="card">${dUtilTable}</div>`, (VIEWDATA.dutil||[]).length)}
+    ${sec("lead","Longest-running dies","elapsed time vs actual work time",
+      `<div class="card">${ltTable}</div>`, ltRows.length)}
     <p class="foot">
       Touch % is time in a logged session divided by total elapsed time since the die's first event.
       NA counts as touch, since assembly and fitting setups are real work. Time at an outside vendor
@@ -522,8 +547,15 @@ document.getElementById("app").addEventListener("click", async (e)=>{
   if(a==="cleardates"){ setQuick(30,"30d");
     await loadViews(); if(SELDIE) await loadJourney(); renderDash(); }
   if(a==="pickdie"){ SELDIE=b.dataset.c; JOURNEY_MODE="stages";
+    if(!OPEN.journey){ OPEN.journey=true; LS.set("dt:open",JSON.stringify(OPEN)); }
     await loadJourney(); renderDash();
-    const el=document.querySelector("h2"); if(el&&el.scrollIntoView) el.scrollIntoView({block:"start"}); }
+    /* scroll to the journey panel itself, not the first heading on the page */
+    requestAnimationFrame(()=>{
+      const el=document.getElementById("journeysec");
+      if(el&&el.scrollIntoView) el.scrollIntoView({behavior:"smooth", block:"start"});
+    });
+  }
+  if(a==="sec"){ toggleSec(b.dataset.k); renderDash(); }
   if(a==="closedie"){ SELDIE=null; JOURNEY=[]; DIEEVENTS=[]; JOURNEY_ALL=false; renderDash(); }
   if(a==="jmode"){ JOURNEY_MODE=b.dataset.m; renderDash(); }
   if(a==="jall"){ JOURNEY_ALL=!JOURNEY_ALL; await loadJourney(); renderDash(); }
