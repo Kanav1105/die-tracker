@@ -187,27 +187,34 @@ let dashErr = null;
 let DIELIST = [], DIEQ = "", SELDIE = null, JOURNEY = [], DIEEVENTS = [];
 /* Which sections are expanded. Persisted per device so each board member keeps
    their own layout. */
-const SEC_DEFAULT = {kpi:true, journey:true, holds:true, queue:true,
-                     occ:false, mutil:false, dutil:false, lead:false};
+const SEC_DEFAULT = {kpi:true, parthours:true, journey:true, holds:true, queue:true,
+                     occ:false, mutil:false, mjourney:false, dutil:false, lead:false};
 let OPEN = (()=>{ try{ return {...SEC_DEFAULT, ...JSON.parse(LS.get("dt:open")||"{}")}; }
                   catch(e){ return {...SEC_DEFAULT}; } })();
 function toggleSec(k){ OPEN[k]=!OPEN[k]; LS.set("dt:open", JSON.stringify(OPEN)); }
 let JOURNEY_MODE = "stages";   // "stages" | "events"
 let JOURNEY_ALL  = false;      // true = ignore the date window for this die
+/* Die-Hours Summary (by part) */
+let PARTLIST = [], PARTQ = "", SELPART = null, PARTHOURS = [], PART_NET = true;
+/* Machine journey */
+let MACHLIST = [], MACHQ = "", SELMACH = null, MJOURNEY = [], MEVENTS = [];
+let MJ_MODE = "stages", MJ_ALL = false;
 
 async function loadViews(){
   const p = { from_ts: windowFrom(), to_ts: windowTo() };
   try{
-    const [holds, occ, lead, queue, mutil, dutil, dlist] = await Promise.all([
+    const [holds, occ, lead, queue, mutil, dutil, dlist, plist, mlist] = await Promise.all([
       sb.rpc("f_hold_summary", p),
       sb.rpc("f_machine_occupancy", p),
       sb.rpc("f_die_leadtime", p),
       sb.rpc("f_queue_by_stage", p),
       sb.rpc("f_machine_utilisation", { ...p, hours_per_day: HOURS_PER_DAY }),
       sb.rpc("f_die_utilisation", p),
-      sb.rpc("f_die_list", p)
+      sb.rpc("f_die_list", p),
+      sb.rpc("f_part_list", p),
+      sb.rpc("f_machine_list", p)
     ]);
-    for(const r of [holds,occ,lead,queue,mutil,dutil,dlist]) if(r.error) throw r.error;
+    for(const r of [holds,occ,lead,queue,mutil,dutil,dlist,plist,mlist]) if(r.error) throw r.error;
     const num = (rows,keys)=> (rows||[]).map(r=>{
       const o={...r}; keys.forEach(k=>{ if(o[k]!=null) o[k]=Number(o[k]); }); return o; });
     VIEWDATA = {
@@ -219,6 +226,8 @@ async function loadViews(){
       dutil:      num(dutil.data, ["window_hours","active_hours","vacant_hours","util_pct","sessions"])
     };
     DIELIST = num(dlist.data, ["stages_done","elapsed_days","touch_days","hold_days"]);
+    PARTLIST = num(plist.data, ["dies","operations"]);
+    MACHLIST = num(mlist.data, ["jobs","dies","busy_hours"]);
     dashErr = null;
   }catch(e){ dashErr = e.message || String(e); }
 }
@@ -243,6 +252,40 @@ async function loadJourney(){
       duration_hours:Number(r.duration_hours), queue_before_hours:r.queue_before_hours==null?null:Number(r.queue_before_hours),
       hold_hours:Number(r.hold_hours)}));
     DIEEVENTS = e.data||[];
+    dashErr=null;
+  }catch(err){ dashErr = err.message || String(err); }
+}
+
+async function loadPartHours(){
+  if(!SELPART){ PARTHOURS=[]; return; }
+  try{
+    const r = await sb.rpc("f_part_hours", { p_part: SELPART,
+      from_ts: windowFrom(), to_ts: windowTo(), net: PART_NET });
+    if(r.error) throw r.error;
+    PARTHOURS = (r.data||[]).map(x=>{
+      const o={...x};
+      ["machining_hours","press_hours","assembly_hours","fitting_hours",
+       "modification_hours","drilling_hours","other_hours","total_hours","visits"]
+        .forEach(k=>o[k]=Number(o[k]||0));
+      return o; });
+    dashErr=null;
+  }catch(e){ dashErr = e.message || String(e); }
+}
+
+async function loadMachJourney(){
+  if(!SELMACH){ MJOURNEY=[]; MEVENTS=[]; return; }
+  const from = MJ_ALL ? new Date(0).toISOString() : windowFrom();
+  const to   = MJ_ALL ? new Date().toISOString() : windowTo();
+  try{
+    const [j,e] = await Promise.all([
+      sb.rpc("f_machine_journey", { p_machine: SELMACH, from_ts: from, to_ts: to }),
+      sb.rpc("f_machine_events",  { p_machine: SELMACH, from_ts: from, to_ts: to })
+    ]);
+    if(j.error) throw j.error; if(e.error) throw e.error;
+    MJOURNEY = (j.data||[]).map(r=>({...r,
+      duration_hours:Number(r.duration_hours), hold_hours:Number(r.hold_hours),
+      idle_before_hours:r.idle_before_hours==null?null:Number(r.idle_before_hours)}));
+    MEVENTS = e.data||[];
     dashErr=null;
   }catch(err){ dashErr = err.message || String(err); }
 }
@@ -365,6 +408,134 @@ function renderDash(){
       ${OPEN[key]?body:""}
     </div>`;
 
+  /* ---------------- die-hours summary (by part) ---------------- */
+  const pq = (PARTQ||"").trim().toUpperCase();
+  const partRows = pq ? PARTLIST.filter(p=>(p.part||"").toUpperCase().includes(pq)) : PARTLIST;
+  const partListHtml = partRows.length ? `<table><thead><tr>
+      <th>Part</th><th class="m">Dies</th><th class="m">Operations</th><th class="m">Last activity</th><th></th>
+    </tr></thead><tbody>${partRows.slice(0,50).map(p=>`<tr${p.part===SELPART?' style="background:var(--panel2)"':""}>
+      <td><b>${esc(p.part)}</b></td><td class="m">${p.dies}</td><td class="m">${p.operations}</td>
+      <td class="m">${stamp(new Date(p.last_activity).getTime())}</td>
+      <td><button class="jbtn" data-a="pickpart" data-c="${esc(p.part)}">Summary</button></td>
+    </tr>`).join("")}</tbody></table>`
+    : `<p class="empty">${PARTLIST.length?"No part matches that search.":"No part activity in this window."}</p>`;
+
+  let partHoursHtml = "";
+  if(SELPART){
+    const T=(k)=>PARTHOURS.reduce((s,r)=>s+Number(r[k]||0),0);
+    const cols=[["machining_hours","Machining"],["press_hours","Press"],["assembly_hours","Assembly"],
+      ["fitting_hours","Fitting"],["modification_hours","Modification"],["drilling_hours","Drilling"],
+      ["other_hours","Other"]];
+    const hrs=v=>Number(v)>0?Number(v).toFixed(1):"—";
+    partHoursHtml = `<div class="section" id="parthoursec">
+      <div class="sechead">
+        <div class="left" style="cursor:default">
+          <h2>Die-Hours Summary — ${esc(SELPART)}</h2>
+          <span class="count">${PARTHOURS.length} operation${PARTHOURS.length===1?"":"s"}</span>
+        </div>
+        <span>
+          <button class="jbtn ${PART_NET?"on":""}" data-a="pnet" data-v="1">Working hours</button>
+          <button class="jbtn ${!PART_NET?"on":""}" data-a="pnet" data-v="0">Incl. hold</button>
+          <button class="jbtn close" data-a="closepart">Close</button>
+        </span>
+      </div>
+      <div class="card">
+        ${PARTHOURS.length?`<table><thead><tr>
+          <th>Operation</th><th>Dies</th>${cols.map(c=>`<th class="m">${c[1]}</th>`).join("")}
+          <th class="m">Total</th></tr></thead><tbody>
+          ${PARTHOURS.map(r=>`<tr>
+            <td><b>${esc(r.operation)}</b></td>
+            <td class="m sub">${esc(r.die_codes||"")}</td>
+            ${cols.map(c=>`<td class="m">${hrs(r[c[0]])}</td>`).join("")}
+            <td class="m"><b>${Number(r.total_hours).toFixed(1)}</b></td></tr>`).join("")}
+          <tr style="border-top:2px solid var(--gold)">
+            <td><b style="color:var(--gold)">TOTAL</b></td><td></td>
+            ${cols.map(c=>`<td class="m"><b>${hrs(T(c[0]))}</b></td>`).join("")}
+            <td class="m"><b style="color:var(--gold)">${T("total_hours").toFixed(1)}</b></td></tr>
+        </tbody></table>
+        <p class="sub" style="margin-top:10px">Hours in ${PART_NET
+          ?"<b>working time</b> — hold time removed"
+          :"<b>gross elapsed time</b> — hold time included"}.
+          Other = Raw Casting and Heat Treatment, which sit outside the six categories.</p>`
+        :`<p class="empty">No hours recorded for this part in the selected window.</p>`}
+      </div>
+    </div>`;
+  }
+
+  /* ---------------- machine journey ---------------- */
+  const mq = (MACHQ||"").trim().toUpperCase();
+  const machRows = mq ? MACHLIST.filter(m=>((m.machine_code||"")+" "+(m.machine_name||"")).toUpperCase().includes(mq)) : MACHLIST;
+  const machListHtml = machRows.length ? `<table><thead><tr>
+      <th>Machine</th><th>State</th><th>Now running</th><th class="m">Jobs</th>
+      <th class="m">Dies</th><th class="m">Busy</th><th class="m">Last activity</th><th></th>
+    </tr></thead><tbody>${machRows.map(m=>`<tr${m.machine_code===SELMACH?' style="background:var(--panel2)"':""}>
+      <td><b>${esc(m.machine_name)}</b> <span class="sub">${esc(m.machine_code)}</span></td>
+      <td><span class="tag ${m.state==="running"?"g":"a"}">${(m.state||"").toUpperCase()}</span></td>
+      <td class="m">${esc(m.current_die||"—")}${m.current_stage?` <span class="sub">${esc(m.current_stage)}</span>`:""}</td>
+      <td class="m">${m.jobs}</td><td class="m">${m.dies}</td>
+      <td class="m">${(m.busy_hours/24).toFixed(1)}d</td>
+      <td class="m">${stamp(new Date(m.last_activity).getTime())}</td>
+      <td><button class="jbtn" data-a="pickmach" data-c="${esc(m.machine_code)}">Journey</button></td>
+    </tr>`).join("")}</tbody></table>`
+    : `<p class="empty">${MACHLIST.length?"No machine matches that search.":"No machine activity in this window."}</p>`;
+
+  let machJourneyHtml = "";
+  if(SELMACH){
+    const mName=(MACHLIST.find(x=>x.machine_code===SELMACH)||{}).machine_name||SELMACH;
+    const tot=MJOURNEY.reduce((s,r)=>s+Number(r.duration_hours||0),0);
+    const totHold=MJOURNEY.reduce((s,r)=>s+Number(r.hold_hours||0),0);
+    const totIdle=MJOURNEY.reduce((s,r)=>s+Number(r.idle_before_hours||0),0);
+    const mjStages = MJOURNEY.length ? `<table><thead><tr>
+        <th class="m">#</th><th class="m">Die</th><th>Part</th><th>Stage</th>
+        <th class="m">Started</th><th class="m">Ended</th><th class="m">Idle before</th>
+        <th class="m">Duration</th><th class="m">Hold</th><th class="m">Working</th><th>By</th>
+      </tr></thead><tbody>${MJOURNEY.map(r=>{
+        const work=Number(r.duration_hours)-Number(r.hold_hours);
+        return `<tr>
+        <td class="m">${r.seq}</td><td class="m"><b>${esc(r.die_code)}</b></td>
+        <td>${esc(r.part||"")}</td>
+        <td>${esc(r.stage_no+" "+(r.stage_name||""))}${r.is_open?` <span class="tag g">OPEN</span>`:""}</td>
+        <td class="m">${stamp(new Date(r.started_at).getTime())}</td>
+        <td class="m">${r.ended_at?stamp(new Date(r.ended_at).getTime()):"—"}</td>
+        <td class="m">${r.idle_before_hours==null?"—":(r.idle_before_hours/24).toFixed(1)+"d"}</td>
+        <td class="m">${(r.duration_hours/24).toFixed(1)}d</td>
+        <td class="m">${Number(r.hold_hours)>0?`<span style="color:var(--amber)">${(r.hold_hours/24).toFixed(1)}d</span>`:"—"}</td>
+        <td class="m"><b>${(work/24).toFixed(1)}d</b></td>
+        <td>${esc(r.operator||"")}</td></tr>`}).join("")}</tbody></table>`
+      : `<p class="empty">No jobs on this machine in the selected window.</p>`;
+    const mjEvents = MEVENTS.length ? `<table><thead><tr>
+        <th class="m">When</th><th>Type</th><th class="m">Die</th><th>Stage</th><th>Reason</th><th>By</th>
+      </tr></thead><tbody>${MEVENTS.map(e=>`<tr>
+        <td class="m">${stamp(new Date(e.ts).getTime())}</td>
+        <td><span class="tag ${e.type==="START"?"g":"a"}">${esc(e.type)}</span></td>
+        <td class="m">${esc(e.die_code||"")}</td>
+        <td>${e.stage_no?esc(e.stage_no+" "+(e.stage_name||"")):"—"}</td>
+        <td>${esc(e.reason||"")}</td><td>${esc(e.operator||"")}</td></tr>`).join("")}</tbody></table>`
+      : `<p class="empty">No events on this machine in the selected window.</p>`;
+    machJourneyHtml = `<div class="section" id="machjourneysec">
+      <div class="sechead">
+        <div class="left" style="cursor:default">
+          <h2>Machine Journey — ${esc(mName)}</h2>
+          <span class="count">${MJOURNEY.length} job${MJOURNEY.length===1?"":"s"}</span>
+        </div>
+        <span>
+          <button class="jbtn ${MJ_MODE==="stages"?"on":""}" data-a="mjmode" data-m="stages">Jobs</button>
+          <button class="jbtn ${MJ_MODE==="events"?"on":""}" data-a="mjmode" data-m="events">Every event</button>
+          <button class="jbtn ${MJ_ALL?"on":""}" data-a="mjall">${MJ_ALL?"Full history":"Within dates"}</button>
+          <button class="jbtn close" data-a="closemach">Close</button>
+        </span>
+      </div>
+      <div class="kpis" style="margin-bottom:14px">
+        <div class="kpi"><div class="k">Jobs</div><div class="v">${MJOURNEY.length}</div></div>
+        <div class="kpi"><div class="k">Total occupied</div><div class="v">${(tot/24).toFixed(1)}<small>d</small></div></div>
+        <div class="kpi warn"><div class="k">Of which on hold</div><div class="v">${(totHold/24).toFixed(1)}<small>d</small></div></div>
+        <div class="kpi good"><div class="k">Working time</div><div class="v">${((tot-totHold)/24).toFixed(1)}<small>d</small></div></div>
+        <div class="kpi"><div class="k">Idle between jobs</div><div class="v">${(totIdle/24).toFixed(1)}<small>d</small></div></div>
+      </div>
+      <div class="card">${MJ_MODE==="stages"?mjStages:mjEvents}</div>
+    </div>`;
+  }
+
   /* ---------------- die journey ---------------- */
   const q = (DIEQ||"").trim().toUpperCase();
   const dieRows = q
@@ -373,7 +544,7 @@ function renderDash(){
   const dieListHtml = dieRows.length ? `<table><thead><tr>
       <th>Die</th><th>Operation</th><th>Part</th><th>State</th><th>Now at</th>
       <th class="m">Stages</th><th class="m">Elapsed</th><th class="m">Touch</th><th class="m">Hold</th><th></th>
-    </tr></thead><tbody>${dieRows.slice(0,30).map(d=>`<tr${d.die_code===SELDIE?' style="background:var(--panel2)"':""}>
+    </tr></thead><tbody>${dieRows.slice(0,60).map(d=>`<tr${d.die_code===SELDIE?' style="background:var(--panel2)"':""}>
       <td class="m"><b>${esc(d.die_code)}</b></td>
       <td>${esc(d.operation||"")}</td><td>${esc(d.part||"")}</td>
       <td><span class="tag ${d.state==="running"?"g":"a"}">${(d.state||"").toUpperCase()}</span></td>
@@ -385,7 +556,7 @@ function renderDash(){
       <td class="m">${Number(d.hold_days)>0?Number(d.hold_days).toFixed(1)+"d":"—"}</td>
       <td><button class="obtn" data-a="pickdie" data-c="${esc(d.die_code)}"
         style="width:auto;padding:5px 11px;font-size:12px">Journey</button></td></tr>`).join("")}
-    </tbody></table>${dieRows.length>30?`<p class="sub" style="margin-top:8px">Showing first 30 of ${dieRows.length}.</p>`:""}`
+    </tbody></table>${dieRows.length>60?`<p class="sub" style="margin-top:8px">Showing first 60 of ${dieRows.length}.</p>`:""}`
     : `<p class="empty">${DIELIST.length?"No die matches that search.":"No die activity in this window."}</p>`;
 
   let journeyHtml = "";
@@ -492,6 +663,13 @@ function renderDash(){
       <span class="sub">live — always this moment, ignores the date range</span>
     </div>
     ${OPEN.kpi?kpis:""}
+    ${sec("parthours","Die-Hours Summary","search a part, then see hours by operation",
+      `<div class="card">
+        <input id="partsearch" placeholder="Search part name…"
+          value="${esc(PARTQ)}" style="max-width:360px;margin-bottom:12px">
+        ${partListHtml}
+      </div>`, PARTLIST.length)}
+    ${partHoursHtml}
     ${sec("journey","Die journey","search a die, then open its full route",
       `<div class="card">
         <input id="diesearch" placeholder="Search die code, part or operation…"
@@ -508,6 +686,13 @@ function renderDash(){
     ${sec("mutil","Machine utilisation",
       `busy vs idle since each machine's first recorded use${HOURS_PER_DAY<24?`, against ${HOURS_PER_DAY}h/day`:", calendar hours"}`,
       `<div class="card">${mUtilTable}</div>`, (VIEWDATA.mutil||[]).length)}
+    ${sec("mjourney","Machine Journey","search a machine, then see every job it ran",
+      `<div class="card">
+        <input id="machsearch" placeholder="Search machine code or name…"
+          value="${esc(MACHQ)}" style="max-width:360px;margin-bottom:12px">
+        ${machListHtml}
+      </div>`, MACHLIST.length)}
+    ${machJourneyHtml}
     ${sec("dutil","Die utilisation","active vs vacant since each die's first recorded activity",
       `<div class="card">${dUtilTable}</div>`, (VIEWDATA.dutil||[]).length)}
     ${sec("lead","Longest-running dies","elapsed time vs actual work time",
@@ -523,11 +708,14 @@ function renderDash(){
       the selected date range.
     </p>`;
   paintNet();
-  const s=document.getElementById("diesearch");
-  if(s){
-    s.oninput=()=>{ DIEQ=s.value; renderDash(); };
-    if(DIEQ){ s.focus(); s.setSelectionRange(s.value.length, s.value.length); }
-  }
+  const bindSearch=(id,get,set)=>{
+    const el=document.getElementById(id); if(!el) return;
+    el.oninput=()=>{ set(el.value); renderDash(); };
+    if(get()){ el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+  };
+  bindSearch("diesearch",  ()=>DIEQ,  v=>DIEQ=v);
+  bindSearch("partsearch", ()=>PARTQ, v=>PARTQ=v);
+  bindSearch("machsearch", ()=>MACHQ, v=>MACHQ=v);
 }
 
 document.querySelectorAll('[data-a="range"]').forEach; // (delegated below)
@@ -535,17 +723,17 @@ document.getElementById("app").addEventListener("click", async (e)=>{
   const b = e.target.closest("[data-a]"); if(!b) return;
   const a=b.dataset.a;
   if(a==="range"){ setQuick(Number(b.dataset.d), b.dataset.l);
-    await loadViews(); if(SELDIE) await loadJourney(); renderDash(); }
+    await loadViews(); if(SELDIE) await loadJourney(); if(SELPART) await loadPartHours(); if(SELMACH) await loadMachJourney(); renderDash(); }
   if(a==="period"){ const s=startOf(b.dataset.k);
     FROM_TS=isoDate(s); TO_TS=null; RANGE_LABEL=b.dataset.l;
-    await loadViews(); if(SELDIE) await loadJourney(); renderDash(); }
+    await loadViews(); if(SELDIE) await loadJourney(); if(SELPART) await loadPartHours(); if(SELMACH) await loadMachJourney(); renderDash(); }
   if(a==="applydates"){
     const f=document.getElementById("fromd"), t=document.getElementById("tod");
     if(f&&f.value){ FROM_TS=f.value; TO_TS=(t&&t.value)?t.value:null; RANGE_LABEL="custom";
-      await loadViews(); if(SELDIE) await loadJourney(); renderDash(); }
+      await loadViews(); if(SELDIE) await loadJourney(); if(SELPART) await loadPartHours(); if(SELMACH) await loadMachJourney(); renderDash(); }
   }
   if(a==="cleardates"){ setQuick(30,"30d");
-    await loadViews(); if(SELDIE) await loadJourney(); renderDash(); }
+    await loadViews(); if(SELDIE) await loadJourney(); if(SELPART) await loadPartHours(); if(SELMACH) await loadMachJourney(); renderDash(); }
   if(a==="pickdie"){ SELDIE=b.dataset.c; JOURNEY_MODE="stages";
     if(!OPEN.journey){ OPEN.journey=true; LS.set("dt:open",JSON.stringify(OPEN)); }
     await loadJourney(); renderDash();
@@ -556,6 +744,21 @@ document.getElementById("app").addEventListener("click", async (e)=>{
     });
   }
   if(a==="sec"){ toggleSec(b.dataset.k); renderDash(); }
+  if(a==="pickpart"){ SELPART=b.dataset.c;
+    if(!OPEN.parthours){ OPEN.parthours=true; LS.set("dt:open",JSON.stringify(OPEN)); }
+    await loadPartHours(); renderDash();
+    requestAnimationFrame(()=>{ const el=document.getElementById("parthoursec");
+      if(el&&el.scrollIntoView) el.scrollIntoView({behavior:"smooth",block:"start"}); }); }
+  if(a==="closepart"){ SELPART=null; PARTHOURS=[]; renderDash(); }
+  if(a==="pnet"){ PART_NET = b.dataset.v==="1"; await loadPartHours(); renderDash(); }
+  if(a==="pickmach"){ SELMACH=b.dataset.c; MJ_MODE="stages";
+    if(!OPEN.mjourney){ OPEN.mjourney=true; LS.set("dt:open",JSON.stringify(OPEN)); }
+    await loadMachJourney(); renderDash();
+    requestAnimationFrame(()=>{ const el=document.getElementById("machjourneysec");
+      if(el&&el.scrollIntoView) el.scrollIntoView({behavior:"smooth",block:"start"}); }); }
+  if(a==="closemach"){ SELMACH=null; MJOURNEY=[]; MEVENTS=[]; MJ_ALL=false; renderDash(); }
+  if(a==="mjmode"){ MJ_MODE=b.dataset.m; renderDash(); }
+  if(a==="mjall"){ MJ_ALL=!MJ_ALL; await loadMachJourney(); renderDash(); }
   if(a==="closedie"){ SELDIE=null; JOURNEY=[]; DIEEVENTS=[]; JOURNEY_ALL=false; renderDash(); }
   if(a==="jmode"){ JOURNEY_MODE=b.dataset.m; renderDash(); }
   if(a==="jall"){ JOURNEY_ALL=!JOURNEY_ALL; await loadJourney(); renderDash(); }
