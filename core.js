@@ -57,19 +57,44 @@ const rowToEvent=r=>({id:r.id,cid:r.client_event_id,ts:new Date(r.ts).getTime(),
   die:r.die_code,machine:r.machine_code,stage:r.stage_no,sug:r.suggested_stage_no,
   reason:r.reason,by:r.operator,dev:r.device_id});
 
+/* Supabase caps any single select at 1000 rows (PostgREST max-rows). With 1000+
+   dies or 1000+ events the app would silently see only part of the data: dies
+   would be unscannable and running jobs would look like they were never
+   started. This pages through in 1000-row chunks until the table is exhausted.
+   `build` must be a function: a PostgREST query builder can only be used once. */
+const PAGE = 1000;
+async function fetchAll(build, label){
+  let out=[], from=0;
+  for(;;){
+    const {data,error} = await build().range(from, from+PAGE-1);
+    if(error) throw error;
+    out = out.concat(data||[]);
+    if(!data || data.length < PAGE) break;
+    from += PAGE;
+    if(from > 500000){ console.warn("fetchAll stopped at 500k rows:", label); break; }
+  }
+  return out;
+}
+
 async function connect(){
   try{
     sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{realtime:{params:{eventsPerSecond:5}}});
     const since=new Date(Date.now()-HISTORY_DAYS*864e5).toISOString();
-    const [st,mc,di,ev]=await Promise.all([
-      sb.from("stages").select("*").order("no"),
-      sb.from("machines").select("*").order("code"),
-      sb.from("dies").select("*").order("code"),
-      sb.from("events").select("*").gte("ts",since).order("ts")]);
-    for(const r of [st,mc,di,ev]) if(r.error) throw r.error;
+    const st = await sb.from("stages").select("*").order("no");
+    if(st.error) throw st.error;
+    const [mc,di,ev] = await Promise.all([
+      fetchAll(()=>sb.from("machines").select("*").order("code"), "machines"),
+      fetchAll(()=>sb.from("dies").select("*").order("code"), "dies"),
+      fetchAll(()=>sb.from("events").select("*").gte("ts",since).order("ts"), "events")
+    ]);
     STAGES=st.data.map(s=>({n:s.no,name:s.name,other:!!s.is_other}));
-    MACHINES=mc.data; DIES=di.data; EVENTS=ev.data.map(rowToEvent);
-    LS.set("dt:cache",JSON.stringify({STAGES,MACHINES,DIES,EVENTS}));
+    MACHINES=mc; DIES=di; EVENTS=ev.map(rowToEvent);
+    /* Offline cache: keep only recent events so we stay well inside the ~5MB
+       localStorage quota. Masters are small and kept whole. */
+    try{
+      LS.set("dt:cache",JSON.stringify({STAGES,MACHINES,DIES,
+        EVENTS:EVENTS.slice(-4000)}));
+    }catch(e){ /* quota exceeded: run without an offline cache rather than fail */ }
     sb.channel("ev").on("postgres_changes",
       {event:"INSERT",schema:"public",table:"events"},p=>{
         const e=rowToEvent(p.new);
